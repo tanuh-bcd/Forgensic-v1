@@ -10,15 +10,6 @@ Set your base URL to the backend host you are running:
 http://127.0.0.1:8000
 ```
 
-## Authentication
-
-- If `AUTH_REQUIRED=true`, send a Firebase ID token in the `Authorization` header.
-- For local demos you can set `AUTH_REQUIRED=false` to disable auth.
-
-```
-Authorization: Bearer YOUR_FIREBASE_ID_TOKEN
-```
-
 ## Endpoints
 
 | Method | Path | Description |
@@ -35,7 +26,6 @@ Authorization: Bearer YOUR_FIREBASE_ID_TOKEN
 
 ```
 curl -X POST "http://127.0.0.1:8000/jobs" \
-  -H "Authorization: Bearer YOUR_FIREBASE_ID_TOKEN" \
   -F "file=@/path/to/document.pdf" \
   -F "ocr_enabled=true"
 ```
@@ -44,21 +34,18 @@ curl -X POST "http://127.0.0.1:8000/jobs" \
 
 ```
 curl -X GET "http://127.0.0.1:8000/jobs/JOB_ID" \
-  -H "Authorization: Bearer YOUR_FIREBASE_ID_TOKEN"
 ```
 
 ### 3) Fetch results
 
 ```
 curl -X GET "http://127.0.0.1:8000/jobs/JOB_ID/results" \
-  -H "Authorization: Bearer YOUR_FIREBASE_ID_TOKEN"
 ```
 
 ### 4) One-time preview download
 
 ```
 curl -L "http://127.0.0.1:8000/jobs/JOB_ID/files/PAGE_001.png" \
-  -H "Authorization: Bearer YOUR_FIREBASE_ID_TOKEN" \
   -o preview.png
 ```
 
@@ -115,7 +102,7 @@ A second request to the same preview URL returns 404 by design.
 - Uploaded files are stored only during processing.
 - Job directories are deleted after processing completes.
 - Rendered previews are cached in memory and served once.
-- Firestore stores summary-only metadata (no images or PDFs).
+- Results are kept in memory during runtime and cleared when the server restarts.
 
 ## OpenAPI docs
 

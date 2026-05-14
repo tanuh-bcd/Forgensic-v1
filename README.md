@@ -1,4 +1,17 @@
-# Forgensic: Documment Forgery Detection Solution
+# 🔍 NHA PS3 - Document Forgery & Deepfake Detection
+**Nikhileswara Rao Sulake<sup>1</sup>, Sai Manikanta Eswar Machara<sup>1</sup>, Sivalal Kethavath<sup>1</sup>**
+
+<sup>1</sup> Rajiv Gandhi University of Knowledge Technologies, Nuzvid, Andhra Pradesh
+
+---
+<!-- Side-by-side images from assets folder -->
+<div style="display:flex;gap:10px;align-items:flex-start;">
+  <img src="assets/img2.png" alt="Image 1" style="width:49%;height:auto;" />
+  <img src="assets/img1.png" alt="Image 2" style="width:49%;height:auto;" />
+</div>
+
+### Internal Validation Score: **0.5315** &nbsp;·&nbsp; Leaderboard Position: **Top 3**
+
 ---
 
 This pipeline is a **completely classical computer vision–based solution**, where no models or other heavy components are required. Just using traditional, pre-defined libraries, our solution is capable enough to detect document forgery across all 9 tampering categories.
@@ -49,10 +62,9 @@ We will set the local API URL to 127.0.0.1 on 8000 port, we can do any toggle in
 
 ```
 cd .\backend\
-$env:DATA_DIR="$PWD\data"
+$env:DATA_DIR="$env:TEMP\ps3-data"
 $env:CORS_ORIGINS="http://127.0.0.1:5500,http://localhost:5500"
-$env:AUTH_REQUIRED="true"
-$env:PIPELINE_PRESET="super_loose"
+$env:PIPELINE_PRESET="npv_focus"
 $env:TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe"
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -64,7 +76,7 @@ cd .\frontend\
 python -m http.server 5500
 ```
 
-Then you can open the http://127.0.0.1:5500/app.html to see the website, and run all the things properly. Mentioning that the code will run purely on your CPU.
+Then you can open the http://127.0.0.1:5500/index.html to see the website, and run all the things properly. Mentioning that the code will run purely on your CPU.
 
 
 ---
