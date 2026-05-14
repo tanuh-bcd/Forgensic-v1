@@ -1,5 +1,7 @@
 import json
+import mimetypes
 import os
+import shutil
 import uuid
 from time import perf_counter
 from concurrent.futures import ThreadPoolExecutor
@@ -9,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from .config import (
     AUTH_REQUIRED,
@@ -21,10 +23,9 @@ from .config import (
     PIPELINE_PRESET,
     PIPELINE_VERSION,
 )
-from .cloudinary_uploader import init_cloudinary, upload_job_file
 from .firebase import get_firestore, verify_id_token
 from .models import JobCreateResponse, JobResultResponse, JobStatusResponse
-from .pipeline import DetectedRegion, DocumentPage, PageAnalysisResult, run_pipeline
+from .pipeline import DetectedRegion, DocumentPage, PageAnalysisResult, build_findings_summary, run_pipeline
 
 app = FastAPI(title="NHA PS3 Forensics API")
 
@@ -42,7 +43,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 _executor = ThreadPoolExecutor(max_workers=JOB_EXECUTOR_WORKERS)
 _JOB_STATE: Dict[str, Dict[str, Any]] = {}
 _JOB_RESULTS: Dict[str, Dict[str, Any]] = {}
-_JOB_FILES: Dict[str, Dict[str, str]] = {}
+_JOB_FILE_BYTES: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
 
 def _now_iso() -> str:
@@ -137,6 +138,7 @@ def _build_results_payload(
     results: list,
     export_info: Dict[str, Any],
     file_url_map: Dict[str, str],
+    findings_summary: Optional[Dict[str, Any]] = None,
     inference_seconds: Optional[float] = None,
     avg_inference_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
@@ -155,6 +157,8 @@ def _build_results_payload(
         "excel": file_url_map.get("submission_preview.xlsx"),
         "yaml": [file_url_map.get(Path(p).name) for p in export_info.get("yaml_paths", []) if file_url_map.get(Path(p).name)],
     }
+    if not any([export_urls.get("json"), export_urls.get("excel"), export_urls.get("yaml")]):
+        export_urls = {}
 
     return {
         "job_id": job_id,
@@ -164,15 +168,12 @@ def _build_results_payload(
         "pages": payload_pages,
         "category_summary": summary,
         "export_urls": export_urls,
+        "findings_summary": findings_summary,
         "inference_seconds": inference_seconds,
         "avg_inference_seconds": avg_inference_seconds,
         "created_at": _JOB_STATE.get(job_id, {}).get("created_at"),
         "updated_at": _JOB_STATE.get(job_id, {}).get("updated_at"),
     }
-
-
-def _register_job_file(job_id: str, name: str, path: Path) -> None:
-    _JOB_FILES.setdefault(job_id, {})[name] = str(path)
 
 
 def _safe_unlink(path: Path) -> None:
@@ -184,11 +185,26 @@ def _safe_unlink(path: Path) -> None:
         return
 
 
+def _cache_job_file(job_id: str, name: str, path: Path) -> Optional[str]:
+    if not path.exists():
+        return None
+    content_type, _ = mimetypes.guess_type(str(path))
+    try:
+        data = path.read_bytes()
+    except Exception:
+        return None
+    job_files = _JOB_FILE_BYTES.setdefault(job_id, {})
+    job_files[name] = {
+        "content_type": content_type or "application/octet-stream",
+        "data": data,
+    }
+    return f"/jobs/{job_id}/files/{name}"
+    
+
+
 def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_enabled: bool) -> None:
     _write_job_state(job_id, {"status": "processing", "updated_at": _now_iso(), "progress": 0.1})
     job_dir = DATA_DIR / job_id
-    cloudinary_enabled = init_cloudinary()
-    all_cloud_uploaded = cloudinary_enabled
 
     try:
         inference_start = perf_counter()
@@ -197,46 +213,21 @@ def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_en
         pages = run_output["pages"]
         results = run_output["results"]
         export_info = run_output["export_info"]
+        findings_summary = build_findings_summary(pages, results)
 
         avg_inference_seconds = None
         if pages:
             avg_inference_seconds = inference_seconds / max(len(pages), 1)
 
         file_url_map: Dict[str, str] = {}
-
-        def _store_file(file_name: str, local_path: Path) -> Optional[str]:
-            nonlocal all_cloud_uploaded
-            local_url = f"/jobs/{job_id}/files/{file_name}"
-            cloud_url = None
-            if cloudinary_enabled:
-                cloud_url = upload_job_file(local_path, file_name, job_id)
-            if cloud_url:
-                file_url_map[file_name] = cloud_url
-                _safe_unlink(local_path)
-                return cloud_url
-            if cloudinary_enabled:
-                all_cloud_uploaded = False
-            _register_job_file(job_id, file_name, local_path)
-            file_url_map[file_name] = local_url
-            return local_url
-
-        # Register rendered pages and output files for local serving
         for page in pages:
-            if page.image_path:
-                _store_file(page.page_file_name, Path(page.image_path))
-
-        output_dir = Path(run_output["output_dir"])
-        annotations_dir = Path(run_output["annotations_dir"])
-        submission_json = output_dir / "submission.json"
-        if submission_json.exists():
-            _store_file(submission_json.name, submission_json)
-
-        excel_preview = output_dir / "submission_preview.xlsx"
-        if excel_preview.exists():
-            _store_file(excel_preview.name, excel_preview)
-
-        for yaml_path in annotations_dir.glob("*.yaml"):
-            _store_file(yaml_path.name, yaml_path)
+            if not page.image_path:
+                continue
+            page_path = Path(page.image_path)
+            url = _cache_job_file(job_id, page.page_file_name, page_path)
+            if url:
+                file_url_map[page.page_file_name] = url
+            _safe_unlink(page_path)
 
         payload = _build_results_payload(
             job_id,
@@ -245,10 +236,26 @@ def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_en
             results,
             export_info,
             file_url_map,
+            findings_summary,
             inference_seconds,
             avg_inference_seconds,
         )
         _JOB_RESULTS[job_id] = payload
+
+        summary_payload = {
+            "job_id": job_id,
+            "status": "complete",
+            "file_name": file_path.name,
+            "pipeline_version": PIPELINE_VERSION,
+            "pages": [],
+            "category_summary": payload.get("category_summary", {}),
+            "export_urls": {},
+            "findings_summary": findings_summary,
+            "inference_seconds": inference_seconds,
+            "avg_inference_seconds": avg_inference_seconds,
+            "created_at": _JOB_STATE.get(job_id, {}).get("created_at"),
+            "updated_at": _now_iso(),
+        }
 
         _write_job_state(
             job_id,
@@ -258,20 +265,16 @@ def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_en
                 "progress": 1.0,
                 "inference_seconds": inference_seconds,
                 "avg_inference_seconds": avg_inference_seconds,
-                "result": payload,
+                "summary_text": (findings_summary or {}).get("summary_text"),
+                "category_summary": payload.get("category_summary", {}),
+                "result": summary_payload,
             },
         )
 
-        input_url = _store_file(file_path.name, file_path)
-        if input_url:
-            _write_job_state(job_id, {"input_url": input_url})
-            payload["input_url"] = input_url
-
-        if cloudinary_enabled and all_cloud_uploaded:
-            shutil.rmtree(job_dir, ignore_errors=True)
-
     except Exception as exc:
         _write_job_state(job_id, {"status": "error", "updated_at": _now_iso(), "message": str(exc)})
+    finally:
+        shutil.rmtree(job_dir, ignore_errors=True)
 
 
 @app.get("/health")
@@ -369,11 +372,13 @@ async def get_job_results(job_id: str, request: Request) -> JobResultResponse:
 async def get_job_file(job_id: str, file_name: str, request: Request):
     _require_user_info(request.headers.get("authorization"))
 
-    job_files = _JOB_FILES.get(job_id, {})
-    path_str = job_files.get(file_name)
-    if not path_str:
+    job_files = _JOB_FILE_BYTES.get(job_id, {})
+    entry = job_files.get(file_name)
+    if not entry:
         raise HTTPException(status_code=404, detail="File not found")
-    path = Path(path_str)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+    data = entry.get("data", b"")
+    content_type = entry.get("content_type") or "application/octet-stream"
+    job_files.pop(file_name, None)
+    if not job_files:
+        _JOB_FILE_BYTES.pop(job_id, None)
+    return Response(content=data, media_type=content_type)

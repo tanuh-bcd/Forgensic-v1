@@ -64,9 +64,10 @@ We will set the local API URL to 127.0.0.1 on 8000 port, we can do any toggle in
 cd .\backend\
 $env:DATA_DIR="$PWD\data"
 $env:CORS_ORIGINS="http://127.0.0.1:5500,http://localhost:5500"
-$env:AUTH_REQUIRED="false"
-$env:CLOUDINARY_ENABLED="false"
-uvicorn app.main:app --reload
+$env:AUTH_REQUIRED="true"
+$env:PIPELINE_PRESET="super_loose"
+$env:TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe"
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 To start the frontend from the repo root, run the below code in a new powershell:

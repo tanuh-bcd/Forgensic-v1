@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Forgensic Review</title>
+    <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -23,23 +24,32 @@
             <div class="brand-sub" id="brand-sub">Forgery meets forensic clarity</div>
           </div>
         </a>
-        <nav class="nav">
-          <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
-          <a class="nav-link" data-page="review" href="review.html">Review</a>
-          <a class="nav-link" data-page="history" href="history.html">History</a>
-          <a class="nav-link" data-page="insights" href="insights.html">Insights</a>
-          <a class="nav-link" data-page="team" href="team.html">Team</a>
-          <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
-        </nav>
-        <div class="top-actions">
-          <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
-          <div class="user-chip auth-hidden" id="user-chip">
-            <span class="user-dot"></span>
-            <span id="user-name">User</span>
+        <button class="btn btn-ghost menu-toggle" id="mobile-menu-btn" type="button" aria-expanded="false" aria-label="Toggle navigation">
+          Menu
+        </button>
+        <div class="menu-panel" id="menu-panel">
+          <div class="menu-header">
+            <span class="menu-title">Menu</span>
+            <button class="btn btn-ghost menu-back" id="menu-back-btn" type="button">Back</button>
           </div>
-          <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          <nav class="nav">
+            <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
+            <a class="nav-link" data-page="history" href="history.html">History</a>
+            <a class="nav-link" data-page="team" href="team.html">Team</a>
+            <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
+          </nav>
+          <div class="top-actions">
+            <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
+            <div class="user-chip auth-hidden" id="user-chip">
+              <span class="user-dot"></span>
+              <span id="user-name">User</span>
+            </div>
+            <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          </div>
         </div>
       </header>
+
+      <div class="menu-scrim" id="menu-scrim" aria-hidden="true"></div>
 
       <div class="mobile-topbar">
         <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
@@ -60,9 +70,9 @@
       <main class="main">
         <section class="page-hero compact">
           <div>
-            <div class="kicker">Review mode</div>
-            <h1>Inspect every highlighted region.</h1>
-            <p>Click any box to see class details, mark outcomes, and leave a remark. Colors match the class legend on the right.</p>
+            <div class="kicker">Rendered document</div>
+            <h1>View highlighted regions in context.</h1>
+            <p>Click any box to see class details. Colors match the class legend on the right.</p>
           </div>
           <div class="hero-inline">
             <span class="badge ghost" id="review-job-meta">No job loaded</span>
@@ -71,10 +81,10 @@
         </section>
 
         <section class="review-toolbar">
-          <label for="review-job-select">Review job</label>
-          <select id="review-job-select" aria-label="Select a job to review"></select>
+          <label for="review-job-select">Document</label>
+          <select id="review-job-select" aria-label="Select a job to view"></select>
           <button class="btn btn-ghost" id="review-load-btn">Load</button>
-          <span class="card-meta" id="review-job-hint">Choose a past upload to review.</span>
+          <span class="card-meta" id="review-job-hint">Choose a past upload to view.</span>
         </section>
 
         <section class="review-grid">
@@ -107,15 +117,7 @@
             </div>
             <div class="card">
               <div class="card-title">Selected region</div>
-              <div class="card-meta" id="region-meta">Select a box to review.</div>
-            </div>
-            <div class="card">
-              <div class="card-title">Reviewer notes</div>
-              <textarea id="review-notes" placeholder="Add a remark for this detection..."></textarea>
-              <div class="note-actions">
-                <button class="btn btn-ghost" id="btn-reviewed">Mark reviewed</button>
-                <button class="btn btn-ghost" id="btn-fp">Mark false positive</button>
-              </div>
+              <div class="card-meta" id="region-meta">Select a box to view.</div>
             </div>
             <div class="card">
               <div class="card-title">Page summary</div>
@@ -169,9 +171,7 @@
 
       <nav class="bottom-nav">
         <a class="bottom-link" data-page="dashboard" href="app.html">Home</a>
-        <a class="bottom-link" data-page="review" href="review.html">Review</a>
         <a class="bottom-link" data-page="history" href="history.html">History</a>
-        <a class="bottom-link" data-page="insights" href="insights.html">Insights</a>
         <a class="bottom-link" data-page="team" href="team.html">Team</a>
       </nav>
     </div>

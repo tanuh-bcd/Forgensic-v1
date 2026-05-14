@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Forgensic Dashboard</title>
+    <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -23,23 +24,33 @@
             <div class="brand-sub" id="brand-sub">Forgery meets forensic clarity</div>
           </div>
         </a>
-        <nav class="nav">
-          <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
-          <a class="nav-link" data-page="review" href="review.html">Review</a>
-          <a class="nav-link" data-page="history" href="history.html">History</a>
-          <a class="nav-link" data-page="insights" href="insights.html">Insights</a>
-          <a class="nav-link" data-page="team" href="team.html">Team</a>
-          <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
-        </nav>
-        <div class="top-actions">
-          <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
-          <div class="user-chip auth-hidden" id="user-chip">
-            <span class="user-dot"></span>
-            <span id="user-name">User</span>
+        <button class="btn btn-ghost menu-toggle" id="mobile-menu-btn" type="button" aria-expanded="false" aria-label="Toggle navigation">
+          Menu
+        </button>
+        <div class="menu-panel" id="menu-panel">
+          <div class="menu-header">
+            <span class="menu-title">Menu</span>
+            <button class="btn btn-ghost menu-back" id="menu-back-btn" type="button">Back</button>
           </div>
-          <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          <nav class="nav">
+            <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
+            <a class="nav-link" data-page="history" href="history.html">History</a>
+            <a class="nav-link" data-page="team" href="team.html">Team</a>
+            <a class="nav-link" data-page="api" href="api.html">API Access</a>
+            <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
+          </nav>
+          <div class="top-actions">
+            <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
+            <div class="user-chip auth-hidden" id="user-chip">
+              <span class="user-dot"></span>
+              <span id="user-name">User</span>
+            </div>
+            <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          </div>
         </div>
       </header>
+
+      <div class="menu-scrim" id="menu-scrim" aria-hidden="true"></div>
 
       <div class="mobile-topbar">
         <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
@@ -62,7 +73,7 @@
           <div>
             <div class="kicker">Dashboard</div>
             <h1>Document Forgery Detection Tool</h1>
-            <p class="lead">Research-only decision support for document integrity. Review all results with a human expert.</p>
+            <p class="lead">Research-only decision support for document integrity. Verify results with a human expert.</p>
           </div>
 
         </section>
@@ -90,18 +101,8 @@
               <input type="file" id="camera-input" accept="image/*" capture="environment" />
               <button class="btn btn-ghost" id="camera-btn" type="button">Use camera</button>
             </div>
-            <div class="toggle-row">
-              <label class="toggle">
-                <input type="checkbox" id="auto-process" checked />
-                <span>Auto-start after upload</span>
-              </label>
-              <button class="btn btn-primary" id="start-btn">Start now</button>
-            </div>
-            <div class="toggle-row toggle-row-compact">
-              <label class="toggle">
-                <input type="checkbox" id="ocr-toggle" checked />
-                <span>Enable OCR (slower)</span>
-              </label>
+            <div class="action-row">
+              <button class="btn btn-primary" id="start-btn" type="button">Generate summary</button>
             </div>
             <div class="processing-inline">
               <div>
@@ -116,32 +117,27 @@
             <div class="status-pill" id="upload-status">Ready</div>
           </div>
 
-          <div class="card preview-card hidden" id="preview-card">
+          <div class="card preview-card" id="preview-card">
             <div class="card-header">
               <div>
-                <div class="card-title">Latest result</div>
-                <div class="card-meta">Overlay appears as soon as processing finishes.</div>
+                <div class="card-title">Summary</div>
+                <div class="card-meta">Your findings appear as soon as processing finishes.</div>
+                <div class="card-meta" id="summary-file">No document processed yet.</div>
               </div>
               <span class="badge ghost" id="verdict-badge">Awaiting run</span>
             </div>
-            <div class="viewer preview-viewer scan-on" id="preview-viewer">
+            <div class="summary-text" id="summary-text">Upload a file and click “Generate summary” to see results.</div>
+            <div class="action-row">
+              <button class="btn btn-ghost" id="toggle-preview-btn" type="button">Show rendered document</button>
+            </div>
+            <div class="viewer preview-viewer scan-on hidden" id="preview-viewer">
               <div class="doc-silhouette" aria-hidden="true">
                 <span class="doc-corner" aria-hidden="true"></span>
               </div>
-              <img class="scan-logo" src="logos/tanuh_logo.png" alt="TANUH logo" />
-              <div class="scan-overlay" aria-hidden="true"></div>
-              <div class="viewer-empty" id="preview-empty">No results yet.</div>
-              <img id="preview-image" alt="Document preview" />
-              <div class="scan-layer" id="preview-scan" aria-hidden="true"></div>
+              <div class="scan-overlay" id="preview-scan" aria-hidden="true"></div>
+              <div class="viewer-empty" id="preview-empty">No rendered preview yet.</div>
+              <img id="preview-image" alt="Rendered document" />
               <div class="overlay" id="preview-overlay"></div>
-            </div>
-            <div class="preview-summary">
-              <div class="card-meta">Detected classes</div>
-              <div class="summary-grid" id="summary-grid"></div>
-            </div>
-            <div class="preview-footer">
-              <div class="helper-text">Tap inspect to open full review mode.</div>
-              <a class="btn btn-ghost" id="open-review-btn" href="review.html">Inspect in review mode</a>
             </div>
           </div>
         </section>
@@ -191,10 +187,9 @@
 
       <nav class="bottom-nav">
         <a class="bottom-link" data-page="dashboard" href="app.html">Home</a>
-        <a class="bottom-link" data-page="review" href="review.html">Review</a>
         <a class="bottom-link" data-page="history" href="history.html">History</a>
-        <a class="bottom-link" data-page="insights" href="insights.html">Insights</a>
         <a class="bottom-link" data-page="team" href="team.html">Team</a>
+        <a class="bottom-link" data-page="api" href="api.html">API</a>
       </nav>
     </div>
 

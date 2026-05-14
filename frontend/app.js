@@ -5,11 +5,7 @@ import {
   APP_BRAND,
   ADMIN_CREDENTIALS,
   CATEGORY_COLORS,
-  AUTH_ENABLED,
-  QUESTIONNAIRE_KEY,
-  QUESTIONNAIRE_REQUIRED,
-  CONSENT_KEY,
-  CONSENT_REQUIRED
+  AUTH_ENABLED
 } from "./config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import {
@@ -24,10 +20,7 @@ import {
   where,
   orderBy,
   limit,
-  getDocs,
-  doc,
-  setDoc,
-  serverTimestamp
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 const page = document.body?.dataset?.page || "";
@@ -39,19 +32,6 @@ const firebaseConfigured = Object.values(FIREBASE_CONFIG || {}).every(
 );
 const authEnabled = AUTH_ENABLED !== false;
 const firebaseEnabled = firebaseConfigured && authEnabled;
-const consentRequired = CONSENT_REQUIRED !== false;
-const consentDone = localStorage.getItem(CONSENT_KEY) === "true";
-const questionnaireRequired = QUESTIONNAIRE_REQUIRED !== false;
-const questionnaireDone = localStorage.getItem(QUESTIONNAIRE_KEY) === "true";
-
-if (consentRequired && !consentDone) {
-  window.location.href = "consent.html";
-}
-
-if (questionnaireRequired && !questionnaireDone) {
-  window.location.href = "questionnaire.html";
-}
-
 let firebaseApp = null;
 let auth = null;
 let db = null;
@@ -77,6 +57,10 @@ const adminError = $("admin-error");
 const adminNavLinks = $$(".admin-only");
 const navLinks = $$(".nav-link");
 const bottomLinks = $$(".bottom-link");
+const topbar = document.querySelector(".topbar");
+const mobileMenuBtn = $("mobile-menu-btn");
+const menuScrim = document.querySelector(".menu-scrim");
+const menuBackBtn = $("menu-back-btn");
 const brandName = $("brand-name");
 const brandSub = $("brand-sub");
 
@@ -87,8 +71,6 @@ const cameraBtn = $("camera-btn");
 const uploadName = $("upload-name");
 const uploadSize = $("upload-size");
 const uploadStatus = $("upload-status");
-const autoProcess = $("auto-process");
-const ocrToggle = $("ocr-toggle");
 const startBtn = $("start-btn");
 const progressBar = $("progress-bar");
 const progressLabel = $("progress-label");
@@ -96,7 +78,9 @@ const statusFoot = $("status-foot");
 const inferenceTime = $("inference-time");
 const verdictBadge = $("verdict-badge");
 const summaryGrid = $("summary-grid");
-const openReviewBtn = $("open-review-btn");
+const summaryText = $("summary-text");
+const summaryFile = $("summary-file");
+const togglePreviewBtn = $("toggle-preview-btn");
 const recentList = $("recent-list");
 const previewCard = $("preview-card");
 const previewViewer = $("preview-viewer");
@@ -113,9 +97,6 @@ const reviewViewerEmpty = document.querySelector(".viewer-empty");
 const prevPageBtn = $("prev-page");
 const nextPageBtn = $("next-page");
 const regionMeta = $("region-meta");
-const reviewNotes = $("review-notes");
-const btnReviewed = $("btn-reviewed");
-const btnFp = $("btn-fp");
 const classLegend = $("class-legend");
 const reviewSummary = $("review-summary");
 const reviewJobSelect = $("review-job-select");
@@ -125,16 +106,11 @@ const reviewJobHint = $("review-job-hint");
 const historyList = $("history-list");
 const userStats = $("user-stats");
 const historyCharts = $("history-charts");
-const historyModal = $("history-modal");
-const historyModalClose = $("history-modal-close");
-const historyModalTitle = $("history-modal-title");
-const historyModalMeta = $("history-modal-meta");
-const historyModalImage = $("history-modal-image");
-const historyModalOverlay = $("history-modal-overlay");
-const historyModalEmpty = $("history-modal-empty");
-const historyReviewBtn = $("history-review-btn");
+const historyStartInput = $("history-start");
+const historyEndInput = $("history-end");
+const historyDaySelect = $("history-day");
+const historyClearBtn = $("history-clear");
 
-const insightGrid = $("insight-grid");
 
 const adminUsers = $("admin-users");
 const adminClassSummary = $("admin-class-summary");
@@ -159,13 +135,13 @@ let selectedRegionIndex = null;
 const imageObjectUrls = new Map();
 let isAdmin = localStorage.getItem("forgensic_admin") === "true";
 let jobsCache = null;
-let reviewsCache = null;
 let resultCache = new Map();
 let adminJobsCache = null;
-let adminReviewsCache = null;
 let pageInitialized = false;
 let reviewJobList = [];
 let pendingReviewJobId = null;
+let pendingPreviewPage = null;
+let previewLoaded = false;
 
 function setBanner(message) {
   if (!signinBanner) return;
@@ -217,6 +193,37 @@ function setActiveNav() {
   });
   bottomLinks.forEach((link) => {
     link.classList.toggle("active", link.dataset.page === page);
+  });
+}
+
+function setMobileMenuOpen(open) {
+  if (!topbar || !mobileMenuBtn) return;
+  topbar.classList.toggle("menu-open", open);
+  mobileMenuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (menuScrim) menuScrim.classList.toggle("active", open);
+  document.body.classList.toggle("menu-open", open);
+}
+
+function initMobileMenu() {
+  if (!topbar || !mobileMenuBtn) return;
+  mobileMenuBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = topbar.classList.contains("menu-open");
+    setMobileMenuOpen(!isOpen);
+  });
+  navLinks.forEach((link) => {
+    link.addEventListener("click", () => setMobileMenuOpen(false));
+  });
+  menuBackBtn?.addEventListener("click", () => setMobileMenuOpen(false));
+  menuScrim?.addEventListener("click", () => setMobileMenuOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setMobileMenuOpen(false);
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 820) setMobileMenuOpen(false);
+  });
+  document.addEventListener("click", (event) => {
+    if (!topbar.contains(event.target)) setMobileMenuOpen(false);
   });
 }
 
@@ -367,6 +374,49 @@ function formatTimestamp(value) {
   return "";
 }
 
+function parseTimestamp(value) {
+  if (!value) return null;
+  if (typeof value === "string") {
+    if (/^\d{2}-\d{2}-\d{4}-T-\d{2}:\d{2}:\d{2}$/.test(value)) {
+      const [day, month, year, time] = value.split(/[-T-]/);
+      return new Date(`${year}-${month}-${day}T${time}`);
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  return null;
+}
+
+function getHistorySummaryText(job) {
+  return (
+    job.summary_text ||
+    job.result?.findings_summary?.summary_text ||
+    ""
+  );
+}
+
+function applyHistoryFilters(items) {
+  const start = historyStartInput?.value ? new Date(historyStartInput.value) : null;
+  const end = historyEndInput?.value ? new Date(historyEndInput.value) : null;
+  const dayValue = historyDaySelect?.value || "";
+  const dayFilter = dayValue === "" ? null : parseInt(dayValue, 10);
+
+  return (items || []).filter((job) => {
+    const ts = parseTimestamp(job.created_at);
+    if (!ts) return true;
+    if (start && ts < start) return false;
+    if (end && ts > end) return false;
+    if (dayFilter !== null && ts.getDay() !== dayFilter) return false;
+    return true;
+  });
+}
+
 function getJobId(job) {
   return job?.job_id || job?.jobId || job?.result?.job_id || job?.id || "";
 }
@@ -436,8 +486,8 @@ function buildJobLabel(job) {
 function updateReviewHint(job) {
   if (!reviewJobHint) return;
   reviewJobHint.textContent = job
-    ? `Ready to review ${job.file_name || "Document"}.`
-    : "Choose a past upload to review.";
+    ? `Ready to view ${job.file_name || "Document"}.`
+    : "Choose a past upload to view.";
 }
 
 function populateReviewJobs(jobs) {
@@ -482,19 +532,6 @@ function populateReviewJobs(jobs) {
   updateReviewHint(selectedJob || null);
 }
 
-async function hydrateHistoryThumbnail(job, imageEl, placeholderEl) {
-  const jobId = getJobId(job);
-  if (!jobId || !imageEl) return;
-  const apiJobId = resolveApiJobId(jobId, job);
-  let pageData = job?.result?.pages?.[0] || null;
-  if (!pageData) {
-    const payload = await fetchJobResults(apiJobId, job);
-    pageData = payload?.pages?.[0] || null;
-  }
-  if (!pageData?.image_url) return;
-  await loadImageForTarget(pageData.image_url, imageEl, placeholderEl);
-}
-
 function buildCategorySummary(pages) {
   const counts = {};
   pages.forEach((pageItem) => {
@@ -505,9 +542,9 @@ function buildCategorySummary(pages) {
   return counts;
 }
 
-function renderSummary(pages, targetGrid, badge) {
-  const summary = buildCategorySummary(pages || []);
-  const keys = Object.keys(summary).sort();
+function renderSummary(pages, targetGrid, badge, categorySummary = null) {
+  const summary = categorySummary || buildCategorySummary(pages || []);
+  const keys = Object.keys(summary || {}).sort();
   if (targetGrid) {
     targetGrid.innerHTML = "";
     if (!keys.length) {
@@ -523,12 +560,55 @@ function renderSummary(pages, targetGrid, badge) {
   }
 
   if (badge) {
-    badge.textContent = keys.length
-      ? keys.includes("C10") && keys.length === 1
-        ? "Clean"
-        : "Tampering detected"
-      : "Awaiting run";
+    const hasFindings = keys.length > 0;
+    const isClean = hasFindings && keys.includes("C10") && keys.length === 1;
+    badge.textContent = hasFindings ? (isClean ? "Clean" : "Tampering detected") : "Awaiting run";
+    badge.classList.remove("ghost", "success", "alert");
+    if (!hasFindings) {
+      badge.classList.add("ghost");
+    } else if (isClean) {
+      badge.classList.add("success");
+    } else {
+      badge.classList.add("alert");
+    }
   }
+}
+
+function setPreviewVisible(visible) {
+  if (!previewViewer) return;
+  previewViewer.classList.toggle("hidden", !visible);
+  if (togglePreviewBtn) {
+    togglePreviewBtn.textContent = visible ? "Hide rendered document" : "Show rendered document";
+  }
+  if (visible && pendingPreviewPage && !previewLoaded) {
+    if (previewEmpty) {
+      previewEmpty.textContent = "Loading preview...";
+      previewEmpty.style.display = "block";
+    }
+    if (pendingPreviewPage.image_url) {
+      loadPreviewImage(pendingPreviewPage.image_url);
+    }
+    renderStaticOverlay(pendingPreviewPage, previewImage, previewOverlay);
+    previewLoaded = true;
+  }
+}
+
+function resetPreviewState(message) {
+  pendingPreviewPage = null;
+  previewLoaded = false;
+  if (previewImage) {
+    const prevUrl = imageObjectUrls.get(previewImage);
+    if (prevUrl) URL.revokeObjectURL(prevUrl);
+    imageObjectUrls.delete(previewImage);
+    previewImage.removeAttribute("src");
+    previewImage.style.display = "none";
+  }
+  if (previewOverlay) previewOverlay.innerHTML = "";
+  if (previewEmpty) {
+    previewEmpty.textContent = message || "No rendered preview yet.";
+    previewEmpty.style.display = "block";
+  }
+  setPreviewVisible(false);
 }
 
 function renderLegend() {
@@ -549,10 +629,8 @@ function selectFile(file) {
   selectedFile = file;
   if (uploadName) uploadName.textContent = file ? file.name : "No file selected";
   if (uploadSize) uploadSize.textContent = file ? formatBytes(file.size) : "0 MB";
-  if (uploadStatus) uploadStatus.textContent = file ? "Ready to process" : "Ready";
-  if (file && autoProcess?.checked) {
-    startAnalysis();
-  }
+  if (uploadStatus) uploadStatus.textContent = file ? "Ready to analyze" : "Ready";
+  resetPreviewState("No rendered preview yet.");
 }
 
 async function loadImageForTarget(imageUrl, targetImage, emptyEl) {
@@ -635,7 +713,7 @@ function selectRegion(region, index) {
   if (!regionMeta) return;
   regionMeta.textContent = region
     ? `${region.category_id} | ${region.type || "flagged"} | ${region.w}x${region.h}`
-    : "Select a box to review.";
+    : "Select a box to view.";
   document.querySelectorAll(".box").forEach((box) => box.classList.remove("selected"));
   if (index !== null) {
     const target = reviewOverlay?.querySelector(`[data-index='${index}']`);
@@ -694,36 +772,18 @@ function renderPage(index) {
 function renderDashboardPreview(pageData) {
   if (!previewCard || !previewOverlay || !previewImage || !pageData) return;
   previewCard.classList.remove("hidden");
-
-  if (pageData.image_url) {
-    loadPreviewImage(pageData.image_url);
+  pendingPreviewPage = pageData;
+  previewLoaded = false;
+  if (previewEmpty) {
+    previewEmpty.textContent = "Preview ready. Click show to view.";
+    previewEmpty.style.display = "block";
   }
-  renderStaticOverlay(pageData, previewImage, previewOverlay);
-}
-
-async function saveReview(status) {
-  if (!db || !currentUser || !resultsPayload) return;
-  const pageData = resultsPayload.pages?.[activePageIndex];
-  if (!pageData || selectedRegionIndex === null) return;
-
-  const reviewId = `${resultsPayload.job_id}_${pageData.page_number}_${selectedRegionIndex}_${currentUser.uid}`;
-  await setDoc(
-    doc(db, "reviews", reviewId),
-    {
-      job_id: resultsPayload.job_id,
-      page_number: pageData.page_number,
-      region_index: selectedRegionIndex,
-      status,
-      note: reviewNotes?.value || "",
-      user_id: currentUser.uid,
-      user_email: currentUser.email || "",
-      updated_at: serverTimestamp(),
-      created_at: serverTimestamp()
-    },
-    { merge: true }
-  );
-  reviewsCache = null;
-  showToast("Review saved", "info");
+  if (previewOverlay) previewOverlay.innerHTML = "";
+  if (previewImage) {
+    previewImage.removeAttribute("src");
+    previewImage.style.display = "none";
+  }
+  setPreviewVisible(false);
 }
 
 async function pollJob(jobId) {
@@ -778,10 +838,11 @@ async function loadResults(jobId) {
   }
 
   resultsPayload = payload;
-  if (!resultsPayload.pages || !resultsPayload.pages.length) {
-    if (statusFoot) statusFoot.textContent = "No pages detected";
-    if (reviewSummary) reviewSummary.innerHTML = "<div class='card-meta'>No pages detected for this job.</div>";
-    return;
+  const hasPages = resultsPayload.pages && resultsPayload.pages.length;
+  if (!hasPages) {
+    if (statusFoot) statusFoot.textContent = "Summary ready";
+    if (reviewSummary) reviewSummary.innerHTML = "<div class='card-meta'>No pages available.</div>";
+    resetPreviewState("No rendered preview for this job.");
   }
 
   const totalInference = getInferenceSeconds(resultsPayload);
@@ -796,25 +857,35 @@ async function loadResults(jobId) {
   resultCache.set(apiJobId, resultsPayload);
 
   localStorage.setItem(LAST_JOB_KEY, apiJobId);
-  if (openReviewBtn) {
-    openReviewBtn.href = `review.html?job=${apiJobId}`;
+
+  renderSummary(resultsPayload.pages, summaryGrid, verdictBadge, resultsPayload.category_summary);
+  renderSummary(resultsPayload.pages, reviewSummary, null, resultsPayload.category_summary);
+  renderLegend();
+  if (resultsPayload.findings_summary?.summary_text && summaryText) {
+    summaryText.textContent = resultsPayload.findings_summary.summary_text;
+  } else if (summaryText) {
+    summaryText.textContent = "No summary text available for this run.";
+  }
+  if (summaryFile) {
+    summaryFile.textContent = resultsPayload.file_name
+      ? `File: ${resultsPayload.file_name}`
+      : "File: Document";
+  }
+  if (hasPages) {
+    renderDashboardPreview(resultsPayload.pages[0]);
   }
 
-  renderSummary(resultsPayload.pages, summaryGrid, verdictBadge);
-  renderSummary(resultsPayload.pages, reviewSummary, null);
-  renderLegend();
-  renderDashboardPreview(resultsPayload.pages[0]);
-
-  activePageIndex = 0;
-  renderPage(activePageIndex);
-  const firstRegion = resultsPayload.pages[0].regions?.[0] || null;
-  selectRegion(firstRegion, firstRegion ? 0 : null);
+  if (hasPages) {
+    activePageIndex = 0;
+    renderPage(activePageIndex);
+    const firstRegion = resultsPayload.pages[0].regions?.[0] || null;
+    selectRegion(firstRegion, firstRegion ? 0 : null);
+  }
 
   if (statusFoot) statusFoot.textContent = "Complete";
   if (reviewJobMeta) reviewJobMeta.textContent = `Job ${apiJobId}`;
 
   jobsCache = null;
-  reviewsCache = null;
   await loadUserData();
   if (isAdmin) await loadAdmin();
 }
@@ -858,6 +929,8 @@ async function startAnalysis() {
     return;
   }
 
+  resetPreviewState("No rendered preview yet.");
+
   setInferenceTime(null, null);
 
   if (uploadStatus) uploadStatus.textContent = "Uploading...";
@@ -867,7 +940,7 @@ async function startAnalysis() {
   const token = currentUser ? await currentUser.getIdToken() : null;
   const formData = new FormData();
   formData.append("file", selectedFile);
-  formData.append("ocr_enabled", ocrToggle?.checked ? "true" : "false");
+  formData.append("ocr_enabled", "true");
 
   let data;
   try {
@@ -923,22 +996,13 @@ async function fetchUserJobs() {
   return jobsCache;
 }
 
-async function fetchUserReviews() {
-  if (!currentUser || !db) return [];
-  if (reviewsCache) return reviewsCache;
-  const q = query(collection(db, "reviews"), where("user_id", "==", currentUser.uid), limit(200));
-  const snapshot = await getDocs(q);
-  reviewsCache = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  return reviewsCache;
-}
-
-function buildUserSummary(jobs, reviews) {
+function buildUserSummary(jobs) {
   const classCounts = {};
   let totalFlags = 0;
   let totalInferenceSeconds = 0;
   let inferenceJobs = 0;
   jobs.forEach((job) => {
-    let summary = job.result?.category_summary;
+    let summary = job.category_summary || job.result?.category_summary;
     if (!summary && job.result?.pages) {
       summary = buildCategorySummary(job.result.pages);
     }
@@ -954,16 +1018,10 @@ function buildUserSummary(jobs, reviews) {
       inferenceJobs += 1;
     }
   });
-  const reviewCounts = { reviewed: 0, false_positive: 0 };
-  reviews.forEach((review) => {
-    if (review.status === "reviewed") reviewCounts.reviewed += 1;
-    if (review.status === "false_positive") reviewCounts.false_positive += 1;
-  });
   return {
     totalUploads: jobs.length,
     totalFlags,
     classCounts,
-    reviewCounts,
     avgInferenceSeconds: inferenceJobs ? totalInferenceSeconds / inferenceJobs : null
   };
 }
@@ -977,79 +1035,20 @@ function renderHistoryList(items) {
   }
   items.forEach((data) => {
     const row = document.createElement("div");
-    const jobId = getJobId(data);
     row.className = "history-item";
-    row.dataset.jobId = jobId || "";
+    const summaryText = getHistorySummaryText(data) || "Summary not available.";
     row.innerHTML = `
-      <div class="history-thumb">
-        <div class="doc-silhouette" aria-hidden="true">
-          <span class="doc-corner" aria-hidden="true"></span>
-        </div>
-        <img class="history-thumb-image" alt="History preview" />
-      </div>
       <div class="history-main">
         <strong>${data.file_name || "Document"}</strong>
-        <div class="card-meta">${data.status || "unknown"}</div>
+        <div class="card-meta">${formatTimestamp(data.created_at)}</div>
+        <div class="history-summary">${summaryText}</div>
       </div>
-      <div class="history-actions">
-        <span class="card-meta">${formatTimestamp(data.created_at)}</span>
-        <button class="btn btn-ghost btn-mini" type="button">Preview</button>
+      <div class="history-meta">
+        <span class="history-status">${data.status || "unknown"}</span>
       </div>
     `;
-    const thumbImage = row.querySelector(".history-thumb-image");
-    const thumbPlaceholder = row.querySelector(".history-thumb .doc-silhouette");
-    if (thumbImage) {
-      hydrateHistoryThumbnail(data, thumbImage, thumbPlaceholder);
-    }
-    row.querySelector("button")?.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openHistoryModal(data);
-    });
-    row.addEventListener("click", () => openHistoryModal(data));
     historyList.appendChild(row);
   });
-}
-
-async function openHistoryModal(job) {
-  if (!historyModal) return;
-  const jobId = getJobId(job);
-  if (!jobId) return;
-  const apiJobId = resolveApiJobId(jobId, job);
-
-  historyModal.classList.remove("hidden");
-  if (historyModalTitle) historyModalTitle.textContent = job.file_name || "Document";
-  if (historyModalMeta) historyModalMeta.textContent = `${job.status || "unknown"} · ${formatTimestamp(job.created_at)}`;
-  if (historyReviewBtn) {
-    historyReviewBtn.href = `review.html?job=${apiJobId}`;
-    historyReviewBtn.dataset.jobId = apiJobId;
-  }
-  localStorage.setItem(LAST_JOB_KEY, apiJobId);
-  if (historyModalEmpty) {
-    historyModalEmpty.textContent = "Loading preview...";
-    historyModalEmpty.style.display = "block";
-  }
-  if (historyModalOverlay) historyModalOverlay.innerHTML = "";
-
-  const payload = job.result?.pages
-    ? { ...job.result, job_id: apiJobId }
-    : await fetchJobResults(apiJobId, job);
-  if (!payload || !payload.pages?.length) {
-    if (historyModalEmpty) historyModalEmpty.textContent = "No preview available.";
-    return;
-  }
-
-  const pageData = payload.pages[0];
-  if (pageData?.image_url) {
-    await loadImageForTarget(pageData.image_url, historyModalImage, historyModalEmpty);
-    renderStaticOverlay(pageData, historyModalImage, historyModalOverlay);
-  } else if (historyModalEmpty) {
-    historyModalEmpty.textContent = "No preview available.";
-  }
-}
-
-function closeHistoryModal() {
-  if (!historyModal) return;
-  historyModal.classList.add("hidden");
 }
 
 function renderRecentList(items) {
@@ -1084,20 +1083,13 @@ function renderStats(summary) {
   }
 }
 
-function syncAutoProcessState() {
-  if (!autoProcess || !startBtn) return;
-  const isAuto = autoProcess.checked;
-  startBtn.disabled = isAuto;
-}
 
 function renderUserStats(summary) {
   if (!userStats) return;
   userStats.innerHTML = "";
   const blocks = [
     { label: "Uploads", value: summary.totalUploads },
-    { label: "Flags", value: summary.totalFlags },
-    { label: "Reviewed", value: summary.reviewCounts.reviewed },
-    { label: "False positives", value: summary.reviewCounts.false_positive }
+    { label: "Flags", value: summary.totalFlags }
   ];
   blocks.forEach((item) => {
     const card = document.createElement("div");
@@ -1137,75 +1129,18 @@ function renderHistoryCharts(summary) {
 async function loadUserData() {
   if (!currentUser || !db) return;
   const jobs = await fetchUserJobs();
-  const reviews = await fetchUserReviews();
-  const summary = buildUserSummary(jobs, reviews);
+  const summary = buildUserSummary(jobs);
   renderStats(summary);
-  renderHistoryList(jobs);
+  renderHistoryList(applyHistoryFilters(jobs));
   renderRecentList(jobs);
   renderUserStats(summary);
   renderHistoryCharts(summary);
-  renderInsights(summary);
   if (page === "review") {
     populateReviewJobs(jobs);
     if (!resultsPayload && pendingReviewJobId) {
       loadResults(pendingReviewJobId);
     }
   }
-}
-
-function renderInsights(summary) {
-  if (!insightGrid) return;
-  insightGrid.innerHTML = "";
-  const classes = Object.entries(summary.classCounts).sort((a, b) => b[1] - a[1]);
-  const topClasses = classes.slice(0, 5);
-
-  const overview = document.createElement("div");
-  overview.className = "card";
-  overview.innerHTML = `
-    <div class="card-title">Overall activity</div>
-    <div class="card-meta">Uploads and reviews across your history.</div>
-    <div class="stats-grid">
-      <div class="summary-tile"><strong>Uploads</strong><div>${summary.totalUploads}</div></div>
-      <div class="summary-tile"><strong>Reviewed</strong><div>${summary.reviewCounts.reviewed}</div></div>
-      <div class="summary-tile"><strong>False positives</strong><div>${summary.reviewCounts.false_positive}</div></div>
-      <div class="summary-tile"><strong>Flags</strong><div>${summary.totalFlags}</div></div>
-      <div class="summary-tile"><strong>Avg inference</strong><div>${formatSeconds(summary.avgInferenceSeconds)}</div></div>
-    </div>
-  `;
-  insightGrid.appendChild(overview);
-
-  const classCard = document.createElement("div");
-  classCard.className = "card";
-  classCard.innerHTML = `<div class="card-title">Top classes</div><div class="chart"></div>`;
-  const chart = classCard.querySelector(".chart");
-  if (topClasses.length) {
-    const max = Math.max(...topClasses.map(([, value]) => value));
-    topClasses.forEach(([key, value]) => {
-      const row = document.createElement("div");
-      row.className = "chart-row";
-      row.innerHTML = `
-        <span>${key}</span>
-        <div class="chart-bar"><div class="chart-fill" style="width:${(value / max) * 100}%"></div></div>
-        <span>${value}</span>
-      `;
-      chart.appendChild(row);
-    });
-  } else {
-    chart.innerHTML = "<div class='card-meta'>No class data yet.</div>";
-  }
-  insightGrid.appendChild(classCard);
-
-  const noteCard = document.createElement("div");
-  noteCard.className = "card";
-  noteCard.innerHTML = `
-    <div class="card-title">Review outcomes</div>
-    <div class="card-meta">Keep an eye on false positives and review throughput.</div>
-    <div class="stats-grid">
-      <div class="summary-tile"><strong>Reviewed</strong><div>${summary.reviewCounts.reviewed}</div></div>
-      <div class="summary-tile"><strong>False positives</strong><div>${summary.reviewCounts.false_positive}</div></div>
-    </div>
-  `;
-  insightGrid.appendChild(noteCard);
 }
 
 async function fetchAdminJobs() {
@@ -1228,15 +1163,6 @@ async function fetchAdminJobs() {
   return adminJobsCache;
 }
 
-async function fetchAdminReviews() {
-  if (!db) return [];
-  if (adminReviewsCache) return adminReviewsCache;
-  const q = query(collection(db, "reviews"), limit(200));
-  const snapshot = await getDocs(q);
-  adminReviewsCache = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  return adminReviewsCache;
-}
-
 async function loadAdmin() {
   if (!isAdmin || !db) return;
   if (adminUsers) adminUsers.innerHTML = "";
@@ -1244,7 +1170,6 @@ async function loadAdmin() {
   if (adminKpis) adminKpis.innerHTML = "";
 
   const jobs = await fetchAdminJobs();
-  const reviews = await fetchAdminReviews();
 
   const userMap = {};
   const classTotals = {};
@@ -1257,9 +1182,7 @@ async function loadAdmin() {
         email: job.user_email || "unknown",
         name: job.user_name || job.user_email || "User",
         uploads: 0,
-        last: job.created_at || "",
-        reviews: 0,
-        falsePositives: 0
+        last: job.created_at || ""
       };
     }
     userMap[userId].uploads += 1;
@@ -1275,33 +1198,13 @@ async function loadAdmin() {
     }
   });
 
-  reviews.forEach((review) => {
-    const userId = review.user_id || "unknown";
-    if (!userMap[userId]) {
-      userMap[userId] = {
-        email: review.user_email || "unknown",
-        name: review.user_email || "User",
-        uploads: 0,
-        last: "",
-        reviews: 0,
-        falsePositives: 0
-      };
-    }
-    userMap[userId].reviews += 1;
-    if (review.status === "false_positive") userMap[userId].falsePositives += 1;
-  });
-
   const totalUsers = Object.keys(userMap).length;
   const totalUploads = jobs.length;
-  const totalReviews = reviews.length;
-  const totalFalsePositives = reviews.filter((review) => review.status === "false_positive").length;
   const avgInferenceSeconds = inferenceJobs ? totalInferenceSeconds / inferenceJobs : null;
 
   const kpiBlocks = [
     { label: "Total users", value: totalUsers },
     { label: "Total uploads", value: totalUploads },
-    { label: "Reviews logged", value: totalReviews },
-    { label: "False positives", value: totalFalsePositives },
     { label: "Avg inference", value: formatSeconds(avgInferenceSeconds) }
   ];
   if (adminKpis) {
@@ -1338,14 +1241,6 @@ async function loadAdmin() {
         <div>
           <strong>${user.uploads}</strong>
           <div class="card-meta">Uploads</div>
-        </div>
-        <div>
-          <strong>${user.reviews}</strong>
-          <div class="card-meta">Reviews</div>
-        </div>
-        <div>
-          <strong>${user.falsePositives}</strong>
-          <div class="card-meta">False positives</div>
         </div>
       `;
       adminUsers.appendChild(row);
@@ -1384,22 +1279,15 @@ function initDashboard() {
     if (file) selectFile(file);
   });
 
-  startBtn?.addEventListener("click", () => startAnalysis());
-
-  autoProcess?.addEventListener("change", () => {
-    syncAutoProcessState();
-    if (autoProcess.checked && selectedFile) {
-      startAnalysis();
-    }
+  setPreviewVisible(false);
+  togglePreviewBtn?.addEventListener("click", () => {
+    if (!previewViewer) return;
+    setPreviewVisible(previewViewer.classList.contains("hidden"));
   });
 
-  const lastJobId = localStorage.getItem(LAST_JOB_KEY);
-  if (openReviewBtn && (activeJobId || lastJobId)) {
-    openReviewBtn.href = `review.html?job=${activeJobId || lastJobId}`;
-  }
+  startBtn?.addEventListener("click", () => startAnalysis());
 
   setStatus("Idle", 0);
-  syncAutoProcessState();
 }
 
 function initReview() {
@@ -1425,14 +1313,6 @@ function initReview() {
     renderPage(activePageIndex);
   });
 
-  btnReviewed?.addEventListener("click", async () => {
-    await saveReview("reviewed");
-  });
-
-  btnFp?.addEventListener("click", async () => {
-    await saveReview("false_positive");
-  });
-
   reviewJobSelect?.addEventListener("change", () => {
     const jobId = reviewJobSelect.value;
     const selectedJob = reviewJobList.find((job) => getJobId(job) === jobId);
@@ -1442,7 +1322,7 @@ function initReview() {
   reviewLoadBtn?.addEventListener("click", () => {
     const jobId = reviewJobSelect?.value || "";
     if (!jobId) {
-      showToast("Select a job to review", "error");
+      showToast("Select a job to view", "error");
       return;
     }
     pendingReviewJobId = jobId;
@@ -1460,18 +1340,23 @@ function initReview() {
 }
 
 function initHistory() {
-  historyModalClose?.addEventListener("click", () => closeHistoryModal());
-  historyModal?.addEventListener("click", (event) => {
-    if (event.target === historyModal) closeHistoryModal();
+  const onFilterChange = () => {
+    if (!jobsCache) return;
+    const filtered = applyHistoryFilters(jobsCache);
+    renderHistoryList(filtered);
+    const summary = buildUserSummary(filtered);
+    renderUserStats(summary);
+    renderHistoryCharts(summary);
+  };
+  historyStartInput?.addEventListener("change", onFilterChange);
+  historyEndInput?.addEventListener("change", onFilterChange);
+  historyDaySelect?.addEventListener("change", onFilterChange);
+  historyClearBtn?.addEventListener("click", () => {
+    if (historyStartInput) historyStartInput.value = "";
+    if (historyEndInput) historyEndInput.value = "";
+    if (historyDaySelect) historyDaySelect.value = "";
+    onFilterChange();
   });
-  historyReviewBtn?.addEventListener("click", () => {
-    const jobId = historyReviewBtn.dataset.jobId || "";
-    if (jobId) localStorage.setItem(LAST_JOB_KEY, jobId);
-  });
-}
-
-function initInsights() {
-  // Data will be loaded after auth state is ready.
 }
 
 function initAdmin() {
@@ -1484,7 +1369,6 @@ function initPage() {
   if (page === "dashboard") initDashboard();
   if (page === "review") initReview();
   if (page === "history") initHistory();
-  if (page === "insights") initInsights();
   if (page === "admin") initAdmin();
 }
 
@@ -1492,6 +1376,7 @@ function initCommon() {
   updateBrand();
   setActiveNav();
   applyAdminState();
+  initMobileMenu();
 
   topLogoutBtn?.addEventListener("click", async () => {
     if (!auth) return;

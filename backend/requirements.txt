@@ -11,4 +11,3 @@ pyyaml
 pandas
 openpyxl
 firebase-admin
-cloudinary

@@ -50,6 +50,7 @@ class JobResultResponse(BaseModel):
     pages: List[PageResultModel]
     category_summary: Dict[str, int]
     export_urls: Dict[str, Any]
+    findings_summary: Optional[Dict[str, Any]] = None
     inference_seconds: Optional[float] = None
     avg_inference_seconds: Optional[float] = None
     created_at: Optional[str] = None

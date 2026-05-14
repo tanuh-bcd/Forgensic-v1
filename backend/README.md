@@ -12,13 +12,6 @@ This FastAPI service runs the PS3 CV pipeline and exposes job-based APIs.
 - `MAX_UPLOAD_BYTES`: default 10MB.
 - `JOB_EXECUTOR_WORKERS`: number of worker threads.
 
-## Cloudinary (optional)
-- `CLOUDINARY_CLOUD_NAME`
-- `CLOUDINARY_API_KEY`
-- `CLOUDINARY_API_SECRET`
-- `CLOUDINARY_FOLDER` (default: nha-docguard)
-- `CLOUDINARY_TTL_DAYS` (default: 7)
-
 ## Run locally
 ```
 uvicorn app.main:app --reload

@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Forgensic History</title>
+    <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -23,23 +24,33 @@
             <div class="brand-sub" id="brand-sub">Forgery meets forensic clarity</div>
           </div>
         </a>
-        <nav class="nav">
-          <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
-          <a class="nav-link" data-page="review" href="review.html">Review</a>
-          <a class="nav-link" data-page="history" href="history.html">History</a>
-          <a class="nav-link" data-page="insights" href="insights.html">Insights</a>
-          <a class="nav-link" data-page="team" href="team.html">Team</a>
-          <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
-        </nav>
-        <div class="top-actions">
-          <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
-          <div class="user-chip auth-hidden" id="user-chip">
-            <span class="user-dot"></span>
-            <span id="user-name">User</span>
+        <button class="btn btn-ghost menu-toggle" id="mobile-menu-btn" type="button" aria-expanded="false" aria-label="Toggle navigation">
+          Menu
+        </button>
+        <div class="menu-panel" id="menu-panel">
+          <div class="menu-header">
+            <span class="menu-title">Menu</span>
+            <button class="btn btn-ghost menu-back" id="menu-back-btn" type="button">Back</button>
           </div>
-          <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          <nav class="nav">
+            <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
+            <a class="nav-link" data-page="history" href="history.html">History</a>
+            <a class="nav-link" data-page="team" href="team.html">Team</a>
+            <a class="nav-link" data-page="api" href="api.html">API Access</a>
+            <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
+          </nav>
+          <div class="top-actions">
+            <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
+            <div class="user-chip auth-hidden" id="user-chip">
+              <span class="user-dot"></span>
+              <span id="user-name">User</span>
+            </div>
+            <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          </div>
         </div>
       </header>
+
+      <div class="menu-scrim" id="menu-scrim" aria-hidden="true"></div>
 
       <div class="mobile-topbar">
         <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
@@ -61,8 +72,8 @@
         <section class="page-hero compact">
           <div>
             <div class="kicker">Customer history</div>
-            <h1>Track every upload and review decision.</h1>
-            <p>Understand your review outcomes, false positives, and class trends across all uploads.</p>
+            <h1>Track every upload.</h1>
+            <p>Review upload timelines and summaries across all documents.</p>
           </div>
         </section>
 
@@ -71,14 +82,38 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Upload history</div>
-                <div class="card-meta">Most recent documents first.</div>
+                <div class="card-meta">Filter by date or time to narrow results.</div>
               </div>
+            </div>
+            <div class="history-filters">
+              <div class="filter-field">
+                <label for="history-start">From</label>
+                <input type="datetime-local" id="history-start" />
+              </div>
+              <div class="filter-field">
+                <label for="history-end">To</label>
+                <input type="datetime-local" id="history-end" />
+              </div>
+              <div class="filter-field">
+                <label for="history-day">Day</label>
+                <select id="history-day">
+                  <option value="">All days</option>
+                  <option value="0">Sunday</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select>
+              </div>
+              <button class="btn btn-ghost btn-mini" id="history-clear" type="button">Clear</button>
             </div>
             <div class="history-list" id="history-list"></div>
           </div>
 
           <div class="card">
-            <div class="card-title">Your review stats</div>
+            <div class="card-title">Your upload stats</div>
             <div class="stats-grid" id="user-stats"></div>
             <div class="chart" id="history-charts"></div>
           </div>
@@ -129,10 +164,9 @@
 
       <nav class="bottom-nav">
         <a class="bottom-link" data-page="dashboard" href="app.html">Home</a>
-        <a class="bottom-link" data-page="review" href="review.html">Review</a>
         <a class="bottom-link" data-page="history" href="history.html">History</a>
-        <a class="bottom-link" data-page="insights" href="insights.html">Insights</a>
         <a class="bottom-link" data-page="team" href="team.html">Team</a>
+        <a class="bottom-link" data-page="api" href="api.html">API</a>
       </nav>
     </div>
 
@@ -149,30 +183,6 @@
           <button class="btn btn-ghost" id="admin-cancel">Cancel</button>
         </div>
         <div class="modal-error" id="admin-error"></div>
-      </div>
-    </div>
-
-    <div class="modal hidden" id="history-modal" role="dialog" aria-modal="true">
-      <div class="modal-card modal-wide">
-        <div class="modal-head">
-          <div>
-            <div class="card-title" id="history-modal-title">Document preview</div>
-            <div class="card-meta" id="history-modal-meta"></div>
-          </div>
-          <button class="btn btn-ghost" id="history-modal-close">Close</button>
-        </div>
-        <div class="viewer history-viewer scan-on">
-          <div class="doc-silhouette" aria-hidden="true">
-            <span class="doc-corner" aria-hidden="true"></span>
-          </div>
-          <div class="scan-overlay" aria-hidden="true"></div>
-          <div class="viewer-empty" id="history-modal-empty">Loading preview...</div>
-          <img id="history-modal-image" alt="History preview" />
-          <div class="overlay" id="history-modal-overlay"></div>
-        </div>
-        <div class="modal-actions">
-          <a class="btn btn-ghost" id="history-review-btn" href="review.html">Move to review</a>
-        </div>
       </div>
     </div>
 

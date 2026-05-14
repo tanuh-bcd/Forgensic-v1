@@ -1,6 +1,8 @@
 import difflib
 import json
 import math
+import os
+import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -65,6 +67,19 @@ CATEGORY_IDS = {
 
 CATEGORY_ONLY_CLASSES = {"C8", "C10"}
 
+CATEGORY_FALLBACK_LABELS = {
+    "C1": "Copy-paste region",
+    "C2": "Overwritten text",
+    "C3": "Added content",
+    "C4": "Removed content",
+    "C5": "Merged content",
+    "C6": "Watermark removal",
+    "C7": "Irregular spacing",
+    "C8": "AI-generated document",
+    "C9": "AI-edited content",
+    "C10": "No discrepancy",
+}
+
 
 @dataclass
 class DocumentPage:
@@ -102,6 +117,294 @@ class PageAnalysisResult:
     detected_regions: List[DetectedRegion] = field(default_factory=list)
     notes: Dict[str, Any] = field(default_factory=dict)
     debug: Dict[str, Any] = field(default_factory=dict)
+
+
+# =========================
+# OCR FINDINGS SUMMARY
+# =========================
+
+def _resolve_tesseract_cmd() -> Optional[str]:
+    if pytesseract is None:
+        return None
+    cmd = os.environ.get("TESSERACT_CMD")
+    if cmd:
+        pytesseract.pytesseract.tesseract_cmd = cmd
+        return cmd
+    cmd = shutil.which("tesseract")
+    if not cmd:
+        fallback = Path(r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe")
+        if fallback.exists():
+            cmd = str(fallback)
+    if cmd:
+        os.environ["TESSERACT_CMD"] = cmd
+        pytesseract.pytesseract.tesseract_cmd = cmd
+    return cmd
+
+
+def _boxes_close(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int], gap: int) -> bool:
+    return not (
+        a[2] + gap < b[0]
+        or b[2] + gap < a[0]
+        or a[3] + gap < b[1]
+        or b[3] + gap < a[1]
+    )
+
+
+def _merge_box(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]:
+    return min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
+
+
+def _merge_boxes(boxes: List[Tuple[int, int, int, int]], gap: int) -> List[Dict[str, Any]]:
+    clusters = [{"box": b, "count": 1} for b in boxes]
+    if not clusters:
+        return []
+    changed = True
+    while changed:
+        changed = False
+        merged: List[Dict[str, Any]] = []
+        while clusters:
+            curr = clusters.pop()
+            i = 0
+            while i < len(clusters):
+                if _boxes_close(curr["box"], clusters[i]["box"], gap):
+                    curr["box"] = _merge_box(curr["box"], clusters[i]["box"])
+                    curr["count"] += clusters[i]["count"]
+                    clusters.pop(i)
+                    changed = True
+                else:
+                    i += 1
+            merged.append(curr)
+        clusters = merged
+    return clusters
+
+
+def _pad_box(
+    box: Tuple[int, int, int, int],
+    pad: int,
+    width: int,
+    height: int,
+) -> Tuple[int, int, int, int]:
+    x1, y1, x2, y2 = box
+    return (
+        max(0, x1 - pad),
+        max(0, y1 - pad),
+        min(width, x2 + pad),
+        min(height, y2 + pad),
+    )
+
+
+def _box_location(box: Tuple[int, int, int, int], width: int, height: int) -> str:
+    x1, y1, x2, y2 = box
+    cx = (x1 + x2) * 0.5
+    cy = (y1 + y2) * 0.5
+    horiz = "left" if cx < width / 3 else "right" if cx > 2 * width / 3 else "center"
+    vert = "top" if cy < height / 3 else "bottom" if cy > 2 * height / 3 else "middle"
+    if horiz == "center" and vert == "middle":
+        return "center"
+    return f"{vert}-{horiz}"
+
+
+def _ocr_text_for_box(image: "Image.Image", box: Tuple[int, int, int, int], config: str) -> str:
+    if not OCR_ENABLED or pytesseract is None or Image is None:
+        return ""
+    x1, y1, x2, y2 = box
+    if x2 <= x1 or y2 <= y1:
+        return ""
+    crop = image.crop((x1, y1, x2, y2))
+    try:
+        text = pytesseract.image_to_string(crop, config=config)
+    except Exception:
+        return ""
+    return " ".join(text.split())
+
+
+def _clean_snippet(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = re.sub(r"[^A-Za-z0-9&()\-./: ]+", " ", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) < 8:
+        return ""
+    letters = sum(ch.isalpha() for ch in cleaned)
+    if letters / max(len(cleaned), 1) < 0.4:
+        return ""
+    return cleaned
+
+
+def _short_phrase(text: str, max_words: int = 10, max_len: int = 80) -> str:
+    if not text:
+        return ""
+    words = text.split()
+    phrase = " ".join(words[:max_words])
+    return phrase[:max_len]
+
+
+def _snippet_score(text: str) -> int:
+    if not text:
+        return 0
+    words = text.split()
+    return len(text) + len(words) * 3
+
+
+def _best_snippet(snippets: List[str]) -> str:
+    if not snippets:
+        return ""
+    uniq: List[str] = []
+    for snippet in snippets:
+        if snippet and snippet not in uniq:
+            uniq.append(snippet)
+    if not uniq:
+        return ""
+    return max(uniq, key=_snippet_score)
+
+
+def _parse_context(text: str) -> str:
+    if not text:
+        return ""
+    text_l = " ".join(text.lower().split())
+    parts = []
+    if "signature" in text_l:
+        parts.append("Signature")
+    table_match = re.search(r"(table|tbl)\s*(\d+)", text_l)
+    if table_match:
+        parts.append(f"Table {table_match.group(2)}")
+    section_match = re.search(r"(section|sec\.?)[\s-]*(\d+)", text_l)
+    if section_match:
+        parts.append(f"Section {section_match.group(2)}")
+    if not parts:
+        return ""
+    return ", ".join(dict.fromkeys(parts))
+
+
+def build_findings_summary(
+    pages: List[DocumentPage],
+    results: List[PageAnalysisResult],
+    merge_gap: int = 8,
+    padding: int = 10,
+    ocr_config: str = "--oem 3 --psm 6",
+) -> Dict[str, Any]:
+    tesseract_cmd = _resolve_tesseract_cmd()
+    ocr_active = OCR_ENABLED and pytesseract is not None and Image is not None
+
+    page_map = {p.page_file_name: p for p in pages}
+    groups: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    merge_stats: List[Dict[str, Any]] = []
+
+    total_clusters = 0
+    source_boxes = 0
+    clusters_with_text = 0
+    source_boxes_with_text = 0
+
+    for res in results:
+        page = page_map.get(res.file_name)
+        if page is None:
+            continue
+        image_path = page.image_path or page.original_path
+        if not image_path or Image is None:
+            continue
+        try:
+            with Image.open(image_path).convert("RGB") as image:
+                width, height = image.width, image.height
+                boxes_by_category: Dict[str, List[Tuple[int, int, int, int]]] = {}
+                for region in res.detected_regions:
+                    box = (region.x, region.y, region.x + region.w, region.y + region.h)
+                    boxes_by_category.setdefault(region.category_id, []).append(box)
+
+                for category_id, boxes in boxes_by_category.items():
+                    clusters = _merge_boxes(boxes, merge_gap)
+                    merge_stats.append(
+                        {
+                            "page": res.page_number,
+                            "category": category_id,
+                            "original": len(boxes),
+                            "merged": len(clusters),
+                        }
+                    )
+
+                    for cluster in clusters:
+                        total_clusters += 1
+                        source_boxes += cluster["count"]
+
+                        padded = _pad_box(cluster["box"], padding, width, height)
+                        ocr_text = _ocr_text_for_box(image, padded, ocr_config) if ocr_active else ""
+                        snippet = _short_phrase(_clean_snippet(ocr_text))
+                        if snippet:
+                            clusters_with_text += 1
+                            source_boxes_with_text += cluster["count"]
+
+                        context = _parse_context(ocr_text)
+                        category_label = CATEGORY_FALLBACK_LABELS.get(
+                            category_id, CATEGORY_IDS.get(category_id, category_id)
+                        )
+                        label = context or category_label
+                        location = _box_location(cluster["box"], width, height)
+
+                        key = (res.page_number, category_id)
+                        entry = groups.get(key)
+                        if entry is None:
+                            entry = {
+                                "page": res.page_number,
+                                "category_id": category_id,
+                                "category_label": category_label,
+                                "label": label,
+                                "location": location,
+                                "count": 0,
+                                "snippets": [],
+                                "from_ocr": bool(context),
+                                "top_count": 0,
+                            }
+                            groups[key] = entry
+
+                        entry["count"] += cluster["count"]
+                        if snippet:
+                            entry["snippets"].append(snippet)
+                        if cluster["count"] > entry["top_count"]:
+                            entry["top_count"] = cluster["count"]
+                            entry["location"] = location
+
+        except Exception:
+            continue
+
+    findings: List[Dict[str, Any]] = []
+    for entry in sorted(groups.values(), key=lambda e: (e["page"], e["category_id"])):
+        snippet = _best_snippet(entry["snippets"])
+        category_label = entry["category_label"]
+        if snippet:
+            summary = f"Page {entry['page']}: {category_label} near \"{snippet}\" appears altered."
+        else:
+            summary = f"Page {entry['page']}: {category_label} in {entry['location']} appears altered."
+        findings.append(
+            {
+                "page": entry["page"],
+                "category_id": entry["category_id"],
+                "category_label": category_label,
+                "snippet": snippet or None,
+                "location": entry["location"],
+                "summary": summary,
+            }
+        )
+
+    summary_text = "\n".join(item["summary"] for item in findings)
+
+    sanity = {
+        "ocr_active": ocr_active,
+        "tesseract_cmd": tesseract_cmd,
+        "merge_gap": merge_gap,
+        "padding": padding,
+        "pages": len(pages),
+        "results": len(results),
+        "clusters": total_clusters,
+        "source_boxes": source_boxes,
+        "clusters_with_text": clusters_with_text,
+        "source_boxes_with_text": source_boxes_with_text,
+    }
+
+    return {
+        "summary_text": summary_text,
+        "findings": findings,
+        "sanity": sanity,
+        "merge_stats": merge_stats,
+    }
 
 
 # =========================
@@ -2193,6 +2496,8 @@ def run_pipeline(
         set_tuning_preset(preset)
     if enable_ocr is not None:
         set_ocr_enabled(enable_ocr)
+    if OCR_ENABLED:
+        _resolve_tesseract_cmd()
 
     input_dir = work_dir / "input"
     output_dir = work_dir / "output"

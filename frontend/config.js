@@ -12,12 +12,6 @@ export const FIREBASE_CONFIG = {
 
 export const AUTH_ENABLED = true;
 
-export const QUESTIONNAIRE_REQUIRED = true;
-export const QUESTIONNAIRE_KEY = "forgensic_questionnaire_done";
-
-export const CONSENT_REQUIRED = true;
-export const CONSENT_KEY = "forgensic_consent_done";
-
 export const APP_OPTIONS = {
   maxUploadBytes: 10 * 1024 * 1024,
   preset: "super_loose"
