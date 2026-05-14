@@ -1,70 +1,217 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Forgensic | Secure Document Review</title>
-  <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Forgensic — Document Forgery Detection</title>
+  <meta name="description" content="AI-powered document forgery detection and integrity screening for clinical documents."/>
+  <link rel="icon" href="logos/tanuh_logo.png" type="image/png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css"/>
 </head>
-<body data-page="landing">
-  <div class="landing">
-    <div class="landing-card">
-      <header class="landing-top">
-        <div class="brand brand-logos">
-          <div class="logo-row" aria-hidden="true">
-            <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
-            <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
-            <img class="logo-img logo-iisc" src="logos/IISc_Logo.png" alt="" />
-          </div>
-          <div class="brand-text">
-            <div class="brand-name" id="brand-name">Forgensic</div>
-            <div class="brand-sub" id="brand-sub">Forgery meets forensic clarity</div>
-          </div>
-        </div>
-      </header>
+<body data-page="dashboard">
 
-      <div class="landing-grid">
-        <div class="landing-copy">
-          <div class="kicker">Document integrity platform</div>
-          <h1>Catch forgery in seconds, review with confidence.</h1>
-          <p class="lead team-line">
-            <span>Team:</span>
-            <a class="team-link" href="https://nikhil-rao20.github.io/" target="_blank" rel="noopener">TANUH</a>
-            <!-- <span class="team-sep">|</span> -->
-            <!-- <a class="team-link" href="https://eswarmachara.github.io/" target="_blank" rel="noopener">Sai Manikanta Eswar Machara</a>
-            <span class="team-sep">|</span>
-            <a class="team-link" href="https://scholar.google.com/citations?user=4WX3-nIAAAAJ&hl=en" target="_blank" rel="noopener">Sivalal Kethavath</a> -->
-          </p>
-          <div class="landing-actions">
-            <button class="btn btn-primary" id="landing-login-btn">Sign in</button>
-            <button class="btn btn-ghost" id="landing-start-btn">Open console</button>
-          </div>
-          <div class="landing-meta">Launch the console to upload a document and generate findings.</div>
-          <div class="landing-error hidden" id="landing-error"></div>
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-row-1">
+    <div class="topbar-inner">
+      <!-- LEFT: Brand -->
+      <a class="brand" href="index.html" aria-label="Forgensic home">
+        <svg class="brand-icon" width="36" height="36" viewBox="0 0 32 32" fill="none">
+          <rect x="2" y="2" width="12" height="12" rx="2" fill="#e53e3e"/>
+          <rect x="18" y="2" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6"/>
+          <rect x="2" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6"/>
+          <rect x="18" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".3"/>
+        </svg>
+        <div class="brand-text">
+          <div class="brand-name">Digital Public Infrastructure</div>
+          <div class="brand-sub">TANUH FOUNDATION: AI Center of Excellence in Healthcare</div>
         </div>
-        <div class="landing-panel">
-          <div class="panel-card">
-            <div class="panel-title">Fast onboarding</div>
-            <div class="panel-value">Upload once, auto-process instantly.</div>
-          </div>
-          <div class="panel-card">
-            <div class="panel-title">Explainable signals</div>
-            <div class="panel-value">Colored regions mapped to tamper classes.</div>
-          </div>
-          <div class="panel-card">
-            <div class="panel-title">Audit-ready trail</div>
-            <div class="panel-value">History, reviews, and false positives in one place.</div>
-          </div>
-        </div>
+      </a>
+
+      <!-- RIGHT: Logos -->
+      <div class="topbar-logos">
+        <img class="logo-tanuh" src="logos/tanuh_logo.png" alt="TANUH"/>
+        <img class="logo-moe" src="logos/MoE_Logo.svg" alt="Ministry of Education"/>
+        <img class="logo-iisc" src="logos/IISc_Logo.png" alt="IISc"/>
+        <img class="logo-nha" src="logos/NHA_logo.png" alt="National Health Authority"/>
       </div>
     </div>
   </div>
 
-  <script type="module" src="config.js"></script>
-  <script type="module" src="landing.js"></script>
+  <div class="topbar-row-2">
+    <div class="topbar-inner" style="justify-content:center; gap: 16px;">
+      <!-- CENTER: Tab nav + API Access -->
+      <nav class="tab-nav">
+        <a class="tab-link active" href="index.html" data-tab="dashboard">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+          Forgery Detection
+        </a>
+        <a class="tab-link" href="team.html" data-tab="team">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+          About Us
+        </a>
+      </nav>
+      <a class="btn-api" href="api.html">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        API Access
+      </a>
+    </div>
+  </div>
+
+  <!-- AI OFF badge -->
+  <div class="ai-badge-row">
+    <span class="ai-badge">
+      <span class="ai-dot-off"></span>
+      AI OFF
+    </span>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main-content">
+  <div class="content-container">
+
+    <div class="content-card">
+      <!-- Heading -->
+      <div class="page-heading">
+        <div class="page-heading-row">
+          <svg class="page-heading-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+          <h1>Document Forgery Detection</h1>
+        </div>
+        <p class="page-subtitle">Classical forensic analysis to detect tampering, splicing, and manipulation in clinical documents.</p>
+        <div class="demo-links">
+          <a class="demo-link" href="../assets/img1.JPG" download>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Download Demo Image 1
+          </a>
+          <a class="demo-link" href="../assets/img2.png" download>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Download Demo Image 2
+          </a>
+          <a class="demo-link" href="../assets/sample_document.pdf" download>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Download Demo PDF
+          </a>
+        </div>
+      </div>
+
+      <!-- Notice box -->
+      <div class="notice-box">
+        <div class="notice-item">
+          <svg class="notice-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
+          <span><strong>Note:</strong> Processing time is typically <strong>20 seconds per page</strong>, depending on file size.</span>
+        </div>
+        <div class="notice-item">
+          <svg class="notice-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"/></svg>
+          <span><strong>Privacy Protocol:</strong> This is a non-persistent service. Your data is processed in real-time and purged automatically after use. No data is stored.</span>
+        </div>
+        <div class="notice-item">
+          <svg class="notice-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+          <span><strong>Limit:</strong> Maximum allowed file size is <strong>25 MB</strong>. Supported: PDF, JPG, PNG, BMP, TIFF, WebP.</span>
+        </div>
+      </div>
+
+      <!-- Upload row -->
+      <section class="upload-row">
+        <label class="upload-inline" id="upload-drop">
+          <input type="file" id="upload-input" accept=".pdf,.jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp"/>
+          <svg class="upload-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+          <span class="upload-file-name" id="upload-name">Choose file...</span>
+          <span class="upload-size" id="upload-size"></span>
+        </label>
+        <button class="btn-process" id="start-btn" type="button">Process document</button>
+      </section>
+
+      <!-- Progress -->
+      <section class="progress-section">
+        <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar"></div></div>
+        <div class="progress-meta">
+          <span class="progress-label" id="progress-label">Idle</span>
+          <span id="status-foot" style="color:var(--muted)">Waiting for upload</span>
+          <span class="progress-time" id="inference-time"></span>
+        </div>
+      </section>
+
+      <!-- Tampered flag -->
+      <div class="tampered-flag" id="tampered-flag" data-state="unknown">
+        <span id="tampered-icon">—</span>
+        <span class="tampered-label">Tampered:</span>
+        <span id="tampered-value" class="tampered-value">—</span>
+      </div>
+
+      <!-- Results: Findings (dark) + Preview (light) -->
+      <section class="results-grid">
+
+        <!-- FINDINGS -->
+        <div class="findings-panel">
+          <div class="findings-header">
+            <div class="findings-title">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h5a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+              FINDINGS
+            </div>
+            <div class="findings-meta" id="findings-meta">No document processed yet.</div>
+            <div class="findings-actions">
+              <button class="btn-findings-action" id="copy-findings-btn" type="button">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"/><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z"/></svg>
+                Copy
+              </button>
+              <button class="btn-findings-action" id="download-findings-btn" type="button">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                Download
+              </button>
+            </div>
+          </div>
+          <div class="findings-body" id="findings-list">Upload a file and click "Process document" to see forensic findings.</div>
+        </div>
+
+        <!-- RENDERED DOCUMENT -->
+        <div class="preview-panel card" id="preview-card">
+          <div class="preview-panel-header">
+            <div class="preview-panel-title">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+              RENDERED DOCUMENT
+            </div>
+            <div class="preview-panel-sub">Overlays appear after processing completes.</div>
+            <button class="btn-toggle-preview" id="toggle-preview-btn" type="button">Show rendered document</button>
+          </div>
+          <div class="viewer preview-viewer hidden" id="preview-viewer">
+            <div class="scan-overlay" id="preview-scan" aria-hidden="true"></div>
+            <div class="viewer-empty" id="preview-empty">No rendered preview yet.</div>
+            <img id="preview-image" alt="Rendered document"/>
+            <div class="overlay" id="preview-overlay"></div>
+          </div>
+        </div>
+
+      </section>
+    </div><!-- /content-card -->
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-stats">© 2026 Forgensic · TANUH Foundation · Indian Institute of Science · Bengaluru, India</div>
+</footer>
+
+<!-- Crop modal -->
+<div class="modal hidden" id="crop-modal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Highlighted Region</div>
+        <div class="modal-meta" id="crop-meta">Preview</div>
+      </div>
+      <button class="btn-modal-close" id="crop-close" type="button">✕ Close</button>
+    </div>
+    <div class="crop-body"><img id="crop-image" alt="Cropped region"/></div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast" aria-live="polite"></div>
+
+<script type="module" src="config.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
