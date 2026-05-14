@@ -1,451 +1,266 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Forgensic API Access</title>
-    <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-    <style>
-      .api-page {
-        display: grid;
-        gap: 24px;
-      }
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Forgensic — API Access</title>
+  <meta name="description" content="Developer API guide for the Forgensic document forgery detection system."/>
+  <link rel="icon" href="logos/tanuh_logo.png" type="image/png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body data-page="api">
 
-      .api-hero {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 22px;
-        align-items: center;
-      }
+<header class="topbar">
+  <div class="topbar-row-1">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="Forgensic home">
+        <svg class="brand-icon" width="36" height="36" viewBox="0 0 32 32" fill="none">
+          <rect x="2" y="2" width="12" height="12" rx="2" fill="#e53e3e"/>
+          <rect x="18" y="2" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6"/>
+          <rect x="2" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6"/>
+          <rect x="18" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".3"/>
+        </svg>
+        <div class="brand-text">
+          <div class="brand-name">Digital Public Infrastructure</div>
+          <div class="brand-sub">TANUH FOUNDATION: AI Center of Excellence in Healthcare</div>
+        </div>
+      </a>
 
-      .api-hero-card {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid var(--border);
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-        padding: 20px 22px;
-      }
-
-      .api-hero-card ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .api-hero-card li {
-        padding: 10px 0;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .api-hero-card li:last-child {
-        border-bottom: none;
-      }
-
-      .api-badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 16px;
-      }
-
-      .api-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-radius: 12px;
-        background: rgba(20, 134, 140, 0.08);
-        border: 1px solid rgba(20, 134, 140, 0.2);
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: #0f172a;
-      }
-
-      .api-badge img {
-        height: 18px;
-        width: auto;
-      }
-
-      .api-grid {
-        display: grid;
-        gap: 18px;
-      }
-
-      .api-panel {
-        background: #ffffff;
-        border-radius: 16px;
-        border: 1px solid var(--border);
-        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
-        padding: 20px 22px;
-      }
-
-      .api-panel h3 {
-        margin-top: 0;
-      }
-
-      .api-note {
-        border-left: 4px solid var(--accent);
-        padding: 12px 14px;
-        border-radius: 10px;
-        background: rgba(20, 134, 140, 0.08);
-        color: #0f172a;
-        font-size: 0.92rem;
-      }
-
-      .api-code {
-        background: #0f1720;
-        color: #f8fafc;
-        border-radius: 12px;
-        padding: 14px 16px;
-        font-family: "JetBrains Mono", monospace;
-        font-size: 0.85rem;
-        line-height: 1.55;
-        overflow-x: auto;
-      }
-
-      .api-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.92rem;
-      }
-
-      .api-table th,
-      .api-table td {
-        text-align: left;
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .api-table th {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--muted);
-      }
-
-      .api-method {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        border: 1px solid var(--border);
-      }
-
-      .api-method.post {
-        background: rgba(244, 178, 102, 0.2);
-        color: #8b4b1b;
-      }
-
-      .api-method.get {
-        background: rgba(20, 134, 140, 0.15);
-        color: #0e6c71;
-      }
-
-      .api-split {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 16px;
-      }
-    </style>
-  </head>
-  <body data-page="api">
-    <div class="app-shell">
-      <header class="topbar">
-        <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
-          <div class="logo-row" aria-hidden="true">
-            <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
-            <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
-            <img class="logo-img logo-iisc" src="logos/IISc_Logo.png" alt="" />
-          </div>
-          <div class="brand-text">
-            <div class="brand-name" id="brand-name">Forgensic</div>
-            <div class="brand-sub" id="brand-sub">Forgery meets forensic clarity</div>
-          </div>
+      <div class="topbar-logos">
+        <img class="logo-tanuh" src="logos/tanuh_logo.png" alt="TANUH"/>
+        <img class="logo-moe" src="logos/MoE_Logo.svg" alt="Ministry of Education"/>
+        <img class="logo-iisc" src="logos/IISc_Logo.png" alt="IISc"/>
+        <img class="logo-nha" src="logos/NHA_logo.png" alt="National Health Authority"/>
+      </div>
+    </div>
+  </div>
+  <div class="topbar-row-2">
+    <div class="topbar-inner" style="justify-content:center; gap: 16px;">
+      <nav class="tab-nav">
+        <a class="tab-link" href="index.html" data-tab="dashboard">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+          Forgery Detection
         </a>
-        <button class="btn btn-ghost menu-toggle" id="mobile-menu-btn" type="button" aria-expanded="false" aria-label="Toggle navigation">
-          Menu
-        </button>
-        <div class="menu-panel" id="menu-panel">
-          <div class="menu-header">
-            <span class="menu-title">Menu</span>
-            <button class="btn btn-ghost menu-back" id="menu-back-btn" type="button">Back</button>
-          </div>
-          <nav class="nav">
-            <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
-            <a class="nav-link" data-page="history" href="history.html">History</a>
-            <a class="nav-link" data-page="team" href="team.html">Team</a>
-            <a class="nav-link" data-page="api" href="api.html">API Access</a>
-            <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
-          </nav>
-          <div class="top-actions">
-            <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
-            <div class="user-chip auth-hidden" id="user-chip">
-              <span class="user-dot"></span>
-              <span id="user-name">User</span>
+        <a class="tab-link" href="team.html" data-tab="team">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+          About Us
+        </a>
+      </nav>
+      <a class="btn-api active" href="api.html">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        API Access
+      </a>
+    </div>
+  </div>
+  <div class="ai-badge-row">
+    <span class="ai-badge"><span class="ai-dot-off"></span>AI OFF</span>
+  </div>
+</header>
+
+<main class="main-content">
+  <div class="content-container">
+    <div class="api-page-wrap">
+
+      <!-- Hero section -->
+      <div class="api-section-card">
+        <div class="api-hero">
+          <div>
+            <h1 class="api-heading">Developer API Guide</h1>
+            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required — open access for hackathon evaluation.</p>
+            <div class="api-badges">
+              <span class="api-badge-chip">
+                <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="Python"/>
+                Python
+              </span>
+              <span class="api-badge-chip">
+                <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/fastapi/fastapi-original.svg" alt="FastAPI"/>
+                FastAPI
+              </span>
+              <span class="api-badge-chip">
+                <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/opencv/opencv-original.svg" alt="OpenCV"/>
+                OpenCV
+              </span>
             </div>
-            <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
+          </div>
+          <div class="api-facts">
+            <h3>Quick Facts</h3>
+            <ul>
+              <li>Base URL: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">http://127.0.0.1:8000</code></li>
+              <li>Authentication: None (open access)</li>
+              <li>Accepted: PDF, JPG, PNG, TIFF, BMP, WEBP</li>
+              <li>Max file size: <strong>25 MB</strong></li>
+              <li>Previews served once, then evicted from memory</li>
+            </ul>
           </div>
         </div>
-      </header>
-
-      <div class="menu-scrim" id="menu-scrim" aria-hidden="true"></div>
-
-      <div class="mobile-topbar">
-        <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
-          <div class="logo-row" aria-hidden="true">
-            <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
-            <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
-            <img class="logo-img logo-iisc" src="logos/IISc_Logo.png" alt="" />
-          </div>
-          <div class="brand-text">
-            <div class="brand-name">Forgensic</div>
-            <div class="brand-sub">Forgery meets forensic clarity</div>
-          </div>
-        </a>
       </div>
 
-      <div class="banner hidden" id="signin-banner" role="status"></div>
+      <!-- Endpoints table -->
+      <div class="api-section-card">
+        <h2 style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--ink)">Endpoints</h2>
+        <table class="api-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Path</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="api-method post">POST</span></td>
+              <td><code>/jobs</code></td>
+              <td>Upload a document and create a processing job</td>
+            </tr>
+            <tr>
+              <td><span class="api-method get">GET</span></td>
+              <td><code>/jobs/{job_id}</code></td>
+              <td>Poll job status and progress (0.0 → 1.0)</td>
+            </tr>
+            <tr>
+              <td><span class="api-method get">GET</span></td>
+              <td><code>/jobs/{job_id}/results</code></td>
+              <td>Fetch complete forgery analysis results</td>
+            </tr>
+            <tr>
+              <td><span class="api-method get">GET</span></td>
+              <td><code>/jobs/{job_id}/files/{file_name}</code></td>
+              <td>One-time rendered page preview image</td>
+            </tr>
+            <tr>
+              <td><span class="api-method get">GET</span></td>
+              <td><code>/health</code></td>
+              <td>Service health check</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="api-note">Interactive docs available at <strong>BASE_URL/docs</strong> · OpenAPI JSON at <strong>BASE_URL/openapi.json</strong></div>
+      </div>
 
-      <main class="main">
-        <section class="page-hero compact">
-          <div>
-            <div class="kicker">API Access</div>
-            <h1>Developer guide for Forgensic APIs.</h1>
-            <p class="lead">Submit documents, poll status, and retrieve summary-only results. Rendered previews are optional and served once.</p>
-          </div>
-        </section>
+      <!-- Code examples grid -->
+      <div class="api-grid" style="grid-template-columns:1fr 1fr;gap:16px;display:grid">
 
-        <section class="api-page">
-          <div class="api-hero">
-            <div>
-              <h2>Document Forgery Detector API</h2>
-              <p>Use the API to run tamper detection, track processing progress, and keep data privacy intact. Images are never stored and previews are served once.</p>
-              <div class="api-badges">
-                <span class="api-badge"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="" /> Python</span>
-                <span class="api-badge"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/fastapi/fastapi-original.svg" alt="" /> FastAPI</span>
-                <span class="api-badge"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/opencv/opencv-original.svg" alt="" /> OpenCV</span>
-              </div>
-            </div>
-            <div class="api-hero-card">
-              <h3>Quick facts</h3>
-              <ul>
-                <li>Base URL: use your backend host (example: http://127.0.0.1:8000)</li>
-                <li>Auth: Bearer token (Firebase ID token) or disable auth in dev</li>
-                <li>Uploads: PDF, JPG, PNG, TIFF, BMP, WEBP (max 10 MB)</li>
-                <li>Preview files are served once, then deleted from memory</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="api-grid">
-            <article class="api-panel">
-              <h3>1) Quick start</h3>
-              <p>Replace BASE_URL with your running backend. If auth is enabled, set TOKEN to a Firebase ID token.</p>
-              <pre class="api-code"><code>BASE_URL="http://127.0.0.1:8000"
-TOKEN="YOUR_FIREBASE_ID_TOKEN"</code></pre>
-              <div class="api-note">Docs are available at BASE_URL/docs and OpenAPI JSON at BASE_URL/openapi.json.</div>
-            </article>
-
-            <article class="api-panel">
-              <h3>2) Endpoints</h3>
-              <table class="api-table">
-                <thead>
-                  <tr>
-                    <th>Method</th>
-                    <th>Path</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><span class="api-method post">POST</span></td>
-                    <td>/jobs</td>
-                    <td>Create a job and upload a document (multipart)</td>
-                  </tr>
-                  <tr>
-                    <td><span class="api-method get">GET</span></td>
-                    <td>/jobs/{job_id}</td>
-                    <td>Poll job status and progress</td>
-                  </tr>
-                  <tr>
-                    <td><span class="api-method get">GET</span></td>
-                    <td>/jobs/{job_id}/results</td>
-                    <td>Fetch summary-only results payload</td>
-                  </tr>
-                  <tr>
-                    <td><span class="api-method get">GET</span></td>
-                    <td>/jobs/{job_id}/files/{file_name}</td>
-                    <td>One-time preview bytes for a rendered page image</td>
-                  </tr>
-                  <tr>
-                    <td><span class="api-method get">GET</span></td>
-                    <td>/health</td>
-                    <td>Service health check</td>
-                  </tr>
-                </tbody>
-              </table>
-            </article>
-
-            <article class="api-panel">
-              <h3>3) Upload a document</h3>
-              <p>Send a file as multipart/form-data. The response returns a job_id you can poll.</p>
-              <pre class="api-code"><code>curl -X POST "$BASE_URL/jobs" \
-  -H "Authorization: Bearer $TOKEN" \
+        <div class="api-panel">
+          <h3>1 — Upload a document</h3>
+          <p>Send as <code>multipart/form-data</code>. Returns a <code>job_id</code> to poll.</p>
+          <div class="api-code-wrap">
+            <pre class="api-code">curl -X POST "http://127.0.0.1:8000/jobs" \
   -F "file=@/path/to/document.pdf" \
-  -F "ocr_enabled=true"</code></pre>
-            </article>
+  -F "ocr_enabled=true"</pre>
+            <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
+          </div>
+        </div>
 
-            <article class="api-panel">
-              <h3>4) Poll status</h3>
-              <p>Use the job_id from the upload response.</p>
-              <pre class="api-code"><code>curl -X GET "$BASE_URL/jobs/JOB_ID" \
-  -H "Authorization: Bearer $TOKEN"</code></pre>
-            </article>
+        <div class="api-panel">
+          <h3>2 — Poll job status</h3>
+          <p>Poll until <code>status</code> is <code>"complete"</code> or <code>"error"</code>.</p>
+          <div class="api-code-wrap">
+            <pre class="api-code">curl "http://127.0.0.1:8000/jobs/JOB_ID"
 
-            <article class="api-panel">
-              <h3>5) Fetch results</h3>
-              <p>Results are summary-only, with per-page categories and regions. A findings summary text is included when OCR is available.</p>
-              <pre class="api-code"><code>curl -X GET "$BASE_URL/jobs/JOB_ID/results" \
-  -H "Authorization: Bearer $TOKEN"</code></pre>
-            </article>
-
-            <article class="api-panel">
-              <h3>6) One-time preview</h3>
-              <p>If a page has image_url, you can fetch it once. A second request returns 404 by design.</p>
-              <pre class="api-code"><code>curl -L "$BASE_URL/jobs/JOB_ID/files/PAGE_001.png" \
-  -H "Authorization: Bearer $TOKEN" -o preview.png</code></pre>
-              <div class="api-note">Preview bytes are cached in memory only and evicted after the first fetch.</div>
-            </article>
-
-            <article class="api-panel">
-              <h3>7) Response examples</h3>
-              <div class="api-split">
-                <div>
-                  <div class="api-note" style="margin-bottom:10px;">Job status</div>
-                  <pre class="api-code"><code>{
+# Response:
+{
   "job_id": "abc123",
   "status": "processing",
-  "progress": 0.42,
-  "created_at": "2026-05-14T10:04:12Z",
-  "updated_at": "2026-05-14T10:04:45Z"
-}</code></pre>
-                </div>
-                <div>
-                  <div class="api-note" style="margin-bottom:10px;">Results summary</div>
-                  <pre class="api-code"><code>{
+  "progress": 0.42
+}</pre>
+            <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
+          </div>
+        </div>
+
+        <div class="api-panel">
+          <h3>3 — Fetch results</h3>
+          <p>Returns full forgery findings with per-page categories, regions, and summary text.</p>
+          <div class="api-code-wrap">
+            <pre class="api-code">curl "http://127.0.0.1:8000/jobs/JOB_ID/results"</pre>
+            <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
+          </div>
+        </div>
+
+        <div class="api-panel">
+          <h3>4 — One-time preview</h3>
+          <p>Fetch rendered page image with bounding boxes. Returns <code>404</code> on second request by design.</p>
+          <div class="api-code-wrap">
+            <pre class="api-code">curl -L \
+  "http://127.0.0.1:8000/jobs/JOB_ID/files/page_001.png" \
+  -o preview.png</pre>
+            <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
+          </div>
+          <div class="api-note">Preview bytes cached in memory only — evicted after first fetch.</div>
+        </div>
+
+      </div>
+
+      <!-- Response example -->
+      <div class="api-section-card">
+        <h2 style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--ink)">Results Response Example</h2>
+        <div class="api-split">
+          <div>
+            <div class="api-note" style="margin-bottom:10px">Job status response</div>
+            <pre class="api-code">{
   "job_id": "abc123",
   "status": "complete",
+  "progress": 1.0,
+  "created_at": "2026-05-14T10:04:12Z"
+}</pre>
+          </div>
+          <div>
+            <div class="api-note" style="margin-bottom:10px">Full results payload</div>
+            <pre class="api-code">{
+  "job_id": "abc123",
   "file_name": "report.pdf",
-  "category_summary": {"C1": 2, "C3": 1},
-  "findings_summary": {
-    "summary_text": "Page 1: Added content near \"Hospital Seal\" appears altered.",
-    "findings": [
-      {
-        "page": 1,
-        "category_id": "C3",
-        "category_label": "Added content",
-        "snippet": "Hospital Seal",
-        "location": "top-right",
-        "summary": "Page 1: Added content near \"Hospital Seal\" appears altered."
-      }
-    ]
+  "category_summary": {
+    "C1": 2, "C3": 1
   },
-  "pages": [
-    {"page_number": 1, "image_url": "/jobs/abc123/files/page_001.png"}
-  ]
-}</code></pre>
-                  <div class="api-note" style="margin-top:10px;">If OCR is disabled or unavailable, findings_summary may be null or empty.</div>
-                </div>
-              </div>
-            </article>
-
-            <article class="api-panel">
-              <h3>8) Auth and privacy</h3>
-              <p>Auth is enforced when AUTH_REQUIRED=true. For local demos, set AUTH_REQUIRED=false to skip token checks.</p>
-              <p>Files are deleted after processing. Rendered previews are cached in memory and served once.</p>
-            </article>
-          </div>
-        </section>
-      </main>
-
-      <footer class="site-footer">
-        <div class="footer-inner">
-          <div class="footer-brand">
-            <img class="footer-logo" src="logos/tanuh_logo.png" alt="TANUH logo" />
-            <div class="footer-title">TANUH</div>
-            <div class="footer-subtitle">The AI Centre of Excellence in Healthcare</div>
-            <div class="footer-address">
-              <div>AI Centre of Excellence in Healthcare</div>
-              <div>Indian Institute of Science</div>
-              <div>Seventh Floor, TCS Smart-X Hub</div>
-              <div>Bengaluru, India - 560 012</div>
-            </div>
-            <div class="footer-contact">
-              <div>Email: <a class="footer-link inline" href="mailto:info@tanuh.ai" title="Email TANUH">info@tanuh.ai</a></div>
-              <div>Telephone: <a class="footer-link inline" href="tel:+918022934106" title="Call TANUH">(080) 2293 4106</a> | <a class="footer-link inline" href="tel:+918022934107" title="Call TANUH">(080) 2293 4107</a></div>
-            </div>
-            <div class="footer-copy">&copy; 2026 by TANUH</div>
-          </div>
-          <div class="footer-column">
-            <div class="footer-heading">Solutions</div>
-            <div class="footer-links">
-              <a class="footer-link" href="#" title="Breast Cancer Detection">Breast Cancer Detection</a>
-              <a class="footer-link" href="#" title="Oral Cancer Screening">Oral Cancer Screening</a>
-              <a class="footer-link" href="#" title="Diabetes Management">Diabetes Management</a>
-              <a class="footer-link" href="#" title="Retinal Disease">Retinal Disease</a>
-              <a class="footer-link" href="#" title="Mental Health">Mental Health</a>
-              <a class="footer-link" href="#" title="Renal Health">Renal Health</a>
-            </div>
-          </div>
-          <div class="footer-column">
-            <div class="footer-heading">Company</div>
-            <div class="footer-links">
-              <a class="footer-link" href="#" title="About">About</a>
-              <a class="footer-link" href="#" title="Team">Team</a>
-              <a class="footer-link" href="#" title="IEC">IEC</a>
-              <a class="footer-link" href="#" title="Careers">Careers</a>
-              <a class="footer-link" href="#" title="Contact">Contact</a>
-            </div>
+  "findings_summary": {
+    "summary_text": "Page 1: Added content ...",
+    "findings": [{
+      "page": 1,
+      "category_id": "C3",
+      "category_label": "Added content",
+      "summary": "Page 1: Possible stamp alteration",
+      "box": {"x":120,"y":80,"w":200,"h":60}
+    }]
+  },
+  "pages": [{
+    "page_number": 1,
+    "image_url": "/jobs/abc123/files/page_001.png",
+    "categories": ["C3"],
+    "regions": [...]
+  }]
+}</pre>
           </div>
         </div>
-      </footer>
-
-      <nav class="bottom-nav">
-        <a class="bottom-link" data-page="dashboard" href="app.html">Home</a>
-        <a class="bottom-link" data-page="history" href="history.html">History</a>
-        <a class="bottom-link" data-page="team" href="team.html">Team</a>
-        <a class="bottom-link" data-page="api" href="api.html">API</a>
-      </nav>
-    </div>
-
-    <div class="modal hidden" id="admin-modal" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <div class="card-title">Admin access</div>
-        <p class="card-meta">Enter admin credentials to unlock monitoring tools.</p>
-        <label for="admin-username">Username</label>
-        <input type="text" id="admin-username" placeholder="admin" />
-        <label for="admin-password">Password</label>
-        <input type="password" id="admin-password" placeholder="password" />
-        <div class="modal-actions">
-          <button class="btn btn-primary" id="admin-submit">Enter admin</button>
-          <button class="btn btn-ghost" id="admin-cancel">Cancel</button>
-        </div>
-        <div class="modal-error" id="admin-error"></div>
       </div>
+
+      <!-- Privacy note -->
+      <div class="api-section-card">
+        <h2 style="font-size:16px;font-weight:700;margin-bottom:10px;color:var(--ink)">Privacy &amp; Data Handling</h2>
+        <p style="font-size:13.5px;color:#334155;line-height:1.6">Uploaded files are deleted immediately after processing completes. Rendered preview images are cached in-memory and served exactly once — a second request returns <code>404</code>. No document data is written to disk or stored in any database.</p>
+      </div>
+
     </div>
+  </div>
+</main>
 
-    <div class="toast hidden" id="toast" aria-live="polite"></div>
+<footer class="site-footer">
+  <div class="footer-stats">© 2026 Forgensic · TANUH Foundation · Indian Institute of Science · Bengaluru, India</div>
+</footer>
 
-    <script type="module" src="config.js"></script>
-    <script type="module" src="app.js"></script>
-  </body>
+<div class="toast hidden" id="toast" aria-live="polite"></div>
+
+<script>
+function copyCode(btn) {
+  const pre = btn.closest('.api-code-wrap').querySelector('pre');
+  navigator.clipboard.writeText(pre.textContent.trim()).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1800);
+  });
+}
+</script>
+<script type="module" src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
 </html>

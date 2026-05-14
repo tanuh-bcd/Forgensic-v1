@@ -1,19 +1,7 @@
 export const API_BASE_URL = "http://127.0.0.1:8000";
 
-export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCx-dnh8akgXz0CdvJhQB2jJA_c_5dfL4A",
-  authDomain: "forgensic-e3fb6.firebaseapp.com",
-  projectId: "forgensic-e3fb6",
-  storageBucket: "forgensic-e3fb6.firebasestorage.app",
-  messagingSenderId: "569406481344",
-  appId: "1:569406481344:web:12004004c3865bdb071e25",
-  measurementId: "G-6KXCXTQE45"
-};
-
-export const AUTH_ENABLED = true;
-
 export const APP_OPTIONS = {
-  maxUploadBytes: 10 * 1024 * 1024,
+  maxUploadBytes: 25 * 1024 * 1024,
   preset: "super_loose"
 };
 
@@ -21,11 +9,6 @@ export const APP_BRAND = {
   name: "Forgensic",
   tagline: "Forgery meets forensic clarity",
   subline: "Explainable document integrity intelligence"
-};
-
-export const ADMIN_CREDENTIALS = {
-  username: "admin",
-  password: "admin"
 };
 
 export const CATEGORY_COLORS = {
