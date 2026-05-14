@@ -1,29 +1,28 @@
-import json
 import mimetypes
-import os
 import shutil
 import uuid
 from time import perf_counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from .config import (
-    AUTH_REQUIRED,
     CORS_ORIGINS,
     DATA_DIR,
+    FINDINGS_MAX_PER_PAGE,
+    FINDINGS_MIN_AREA_RATIO,
+    JOB_TTL_SECONDS,
     JOB_EXECUTOR_WORKERS,
     MAX_UPLOAD_BYTES,
     OCR_ENABLED,
     PIPELINE_PRESET,
     PIPELINE_VERSION,
 )
-from .firebase import get_firestore, verify_id_token
 from .models import JobCreateResponse, JobResultResponse, JobStatusResponse
 from .pipeline import DetectedRegion, DocumentPage, PageAnalysisResult, build_findings_summary, run_pipeline
 
@@ -50,51 +49,58 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _get_user_info(authorization: Optional[str]) -> Optional[Dict[str, Any]]:
-    if not authorization:
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    if not value:
         return None
-    if not authorization.lower().startswith("bearer "):
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
         return None
-    token = authorization.split(" ", 1)[1].strip()
-    if not token:
-        return None
-    decoded = verify_id_token(token)
-    if not decoded:
-        return None
-    return {
-        "uid": decoded.get("uid"),
-        "email": decoded.get("email"),
-        "name": decoded.get("name") or decoded.get("displayName"),
-    }
 
 
-def _require_user_info(authorization: Optional[str]) -> Dict[str, Any]:
-    info = _get_user_info(authorization)
-    if AUTH_REQUIRED and not info:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return info or {"uid": "anonymous"}
+def _cleanup_jobs() -> None:
+    if JOB_TTL_SECONDS <= 0:
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=JOB_TTL_SECONDS)
+    for job_id, state in list(_JOB_STATE.items()):
+        stamp = state.get("updated_at") or state.get("created_at")
+        parsed = _parse_iso(stamp)
+        if parsed and parsed < cutoff:
+            _JOB_STATE.pop(job_id, None)
+            _JOB_RESULTS.pop(job_id, None)
+            _JOB_FILE_BYTES.pop(job_id, None)
+            shutil.rmtree(DATA_DIR / job_id, ignore_errors=True)
 
 
 def _write_job_state(job_id: str, payload: Dict[str, Any]) -> None:
     _JOB_STATE.setdefault(job_id, {}).update(payload)
-    db = get_firestore()
-    if db is None:
-        return
-    db.collection("jobs").document(job_id).set(payload, merge=True)
 
 
 def _save_upload(upload: UploadFile, dest: Path) -> int:
     size = 0
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with dest.open("wb") as f:
-        while True:
-            chunk = upload.file.read(1024 * 1024)
-            if not chunk:
-                break
-            size += len(chunk)
-            if size > MAX_UPLOAD_BYTES:
-                raise HTTPException(status_code=413, detail="File exceeds 10MB limit")
-            f.write(chunk)
+    try:
+        with dest.open("wb") as f:
+            while True:
+                chunk = upload.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="File exceeds 25MB limit")
+                f.write(chunk)
+    except HTTPException:
+        try:
+            dest.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    except Exception:
+        try:
+            dest.unlink()
+        except FileNotFoundError:
+            pass
+        raise
     return size
 
 
@@ -117,12 +123,18 @@ def _region_to_dict(region: DetectedRegion) -> Dict[str, Any]:
     }
 
 
-def _result_to_dict(result: PageAnalysisResult, page: Optional[DocumentPage], image_url: Optional[str]) -> Dict[str, Any]:
+def _result_to_dict(
+    result: PageAnalysisResult,
+    page: Optional[DocumentPage],
+    image_url: Optional[str],
+    preview_url: Optional[str],
+) -> Dict[str, Any]:
     return {
         "page_id": f"{result.file_name}",
         "page_number": result.page_number,
         "file_name": result.file_name,
         "image_url": image_url,
+        "preview_url": preview_url,
         "image_width": page.image_width if page else None,
         "image_height": page.image_height if page else None,
         "categories": result.predicted_categories,
@@ -138,6 +150,7 @@ def _build_results_payload(
     results: list,
     export_info: Dict[str, Any],
     file_url_map: Dict[str, str],
+    preview_url_map: Dict[str, str],
     findings_summary: Optional[Dict[str, Any]] = None,
     inference_seconds: Optional[float] = None,
     avg_inference_seconds: Optional[float] = None,
@@ -148,7 +161,8 @@ def _build_results_payload(
     for res in results:
         page = page_map.get(res.file_name)
         image_url = file_url_map.get(res.file_name)
-        payload_pages.append(_result_to_dict(res, page, image_url))
+        preview_url = preview_url_map.get(res.file_name)
+        payload_pages.append(_result_to_dict(res, page, image_url, preview_url))
         for cat in res.predicted_categories:
             summary[cat] = summary.get(cat, 0) + 1
 
@@ -202,7 +216,7 @@ def _cache_job_file(job_id: str, name: str, path: Path) -> Optional[str]:
     
 
 
-def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_enabled: bool) -> None:
+def _process_job(job_id: str, file_path: Path, preset: str, ocr_enabled: bool) -> None:
     _write_job_state(job_id, {"status": "processing", "updated_at": _now_iso(), "progress": 0.1})
     job_dir = DATA_DIR / job_id
 
@@ -213,21 +227,39 @@ def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_en
         pages = run_output["pages"]
         results = run_output["results"]
         export_info = run_output["export_info"]
-        findings_summary = build_findings_summary(pages, results)
+        findings_summary = build_findings_summary(
+            pages,
+            results,
+            max_per_page=FINDINGS_MAX_PER_PAGE,
+            min_area_ratio=FINDINGS_MIN_AREA_RATIO,
+        )
 
         avg_inference_seconds = None
         if pages:
             avg_inference_seconds = inference_seconds / max(len(pages), 1)
 
         file_url_map: Dict[str, str] = {}
+        preview_url_map: Dict[str, str] = {}
         for page in pages:
-            if not page.image_path:
-                continue
-            page_path = Path(page.image_path)
-            url = _cache_job_file(job_id, page.page_file_name, page_path)
-            if url:
-                file_url_map[page.page_file_name] = url
-            _safe_unlink(page_path)
+            page_path = None
+            if page.image_path:
+                page_path = Path(page.image_path)
+            elif page.original_path:
+                page_path = Path(page.original_path)
+
+            if page_path and page_path.exists():
+                url = _cache_job_file(job_id, page.page_file_name, page_path)
+                if url:
+                    file_url_map[page.page_file_name] = url
+                _safe_unlink(page_path)
+
+            preview_path = Path(page.preview_path) if page.preview_path else None
+            if preview_path and preview_path.exists():
+                if not page_path or preview_path.resolve() != page_path.resolve():
+                    preview_url = _cache_job_file(job_id, preview_path.name, preview_path)
+                    if preview_url:
+                        preview_url_map[page.page_file_name] = preview_url
+                    _safe_unlink(preview_path)
 
         payload = _build_results_payload(
             job_id,
@@ -236,6 +268,7 @@ def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_en
             results,
             export_info,
             file_url_map,
+            preview_url_map,
             findings_summary,
             inference_seconds,
             avg_inference_seconds,
@@ -279,20 +312,16 @@ def _process_job(job_id: str, user_id: str, file_path: Path, preset: str, ocr_en
 
 @app.get("/health")
 async def health() -> Dict[str, Any]:
+    _cleanup_jobs()
     return {"ok": True, "time": _now_iso()}
 
 
 @app.post("/jobs", response_model=JobCreateResponse)
 async def create_job(
-    request: Request,
     file: UploadFile = File(...),
     ocr_enabled: Optional[bool] = Form(None),
 ) -> JobCreateResponse:
-    user = _require_user_info(request.headers.get("authorization"))
-    user_id = user.get("uid")
-    user_email = user.get("email")
-    user_name = user.get("name")
-
+    _cleanup_jobs()
     if not file.filename or not _allowed_suffix(file.filename):
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
@@ -311,9 +340,6 @@ async def create_job(
             "progress": 0.0,
             "file_name": file.filename,
             "file_size": size,
-            "user_id": user_id,
-            "user_email": user_email,
-            "user_name": user_name,
             "ocr_enabled": resolved_ocr,
             "created_at": _now_iso(),
             "updated_at": _now_iso(),
@@ -321,22 +347,15 @@ async def create_job(
         },
     )
 
-    _executor.submit(_process_job, job_id, user_id, input_path, PIPELINE_PRESET, resolved_ocr)
+    _executor.submit(_process_job, job_id, input_path, PIPELINE_PRESET, resolved_ocr)
 
     return JobCreateResponse(job_id=job_id, status="queued", message="Job accepted")
 
 
 @app.get("/jobs/{job_id}", response_model=JobStatusResponse)
-async def get_job_status(job_id: str, request: Request) -> JobStatusResponse:
-    _require_user_info(request.headers.get("authorization"))
-
+async def get_job_status(job_id: str) -> JobStatusResponse:
+    _cleanup_jobs()
     state = _JOB_STATE.get(job_id)
-    if not state:
-        db = get_firestore()
-        if db:
-            doc = db.collection("jobs").document(job_id).get()
-            if doc.exists:
-                state = doc.to_dict()
     if not state:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -351,17 +370,9 @@ async def get_job_status(job_id: str, request: Request) -> JobStatusResponse:
 
 
 @app.get("/jobs/{job_id}/results", response_model=JobResultResponse)
-async def get_job_results(job_id: str, request: Request) -> JobResultResponse:
-    _require_user_info(request.headers.get("authorization"))
-
+async def get_job_results(job_id: str) -> JobResultResponse:
+    _cleanup_jobs()
     payload = _JOB_RESULTS.get(job_id)
-    if not payload:
-        db = get_firestore()
-        if db:
-            doc = db.collection("jobs").document(job_id).get()
-            if doc.exists:
-                data = doc.to_dict()
-                payload = data.get("result")
     if not payload:
         raise HTTPException(status_code=404, detail="Results not ready")
 
@@ -369,16 +380,12 @@ async def get_job_results(job_id: str, request: Request) -> JobResultResponse:
 
 
 @app.get("/jobs/{job_id}/files/{file_name}")
-async def get_job_file(job_id: str, file_name: str, request: Request):
-    _require_user_info(request.headers.get("authorization"))
-
+async def get_job_file(job_id: str, file_name: str):
+    _cleanup_jobs()
     job_files = _JOB_FILE_BYTES.get(job_id, {})
     entry = job_files.get(file_name)
     if not entry:
         raise HTTPException(status_code=404, detail="File not found")
     data = entry.get("data", b"")
     content_type = entry.get("content_type") or "application/octet-stream"
-    job_files.pop(file_name, None)
-    if not job_files:
-        _JOB_FILE_BYTES.pop(job_id, None)
     return Response(content=data, media_type=content_type)
