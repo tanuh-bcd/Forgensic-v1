@@ -1,182 +1,203 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Forgensic Team</title>
-    <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body data-page="team">
-    <div class="app-shell">
-      <header class="topbar">
-        <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
-          <div class="logo-row" aria-hidden="true">
-            <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
-            <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
-            <img class="logo-img logo-iisc" src="logos/IISc_Logo.png" alt="" />
-          </div>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Forgensic — About Us & Team</title>
+  <meta name="description"
+    content="Meet the team behind Forgensic, the document forgery detection system from TANUH, IISc." />
+  <link rel="icon" href="logos/tanuh_logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body data-page="team">
+
+  <header class="topbar">
+    <div class="topbar-row-1">
+      <div class="topbar-inner">
+        <a class="brand" href="index.html" aria-label="Forgensic home">
+          <svg class="brand-icon" width="36" height="36" viewBox="0 0 32 32" fill="none">
+            <rect x="2" y="2" width="12" height="12" rx="2" fill="#e53e3e" />
+            <rect x="18" y="2" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6" />
+            <rect x="2" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6" />
+            <rect x="18" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".3" />
+          </svg>
           <div class="brand-text">
-            <div class="brand-name" id="brand-name">Forgensic</div>
-            <div class="brand-sub" id="brand-sub">Forgery meets forensic clarity</div>
+            <div class="brand-name">Digital Public Infrastructure</div>
+            <div class="brand-sub">TANUH FOUNDATION: AI Center of Excellence in Healthcare</div>
           </div>
         </a>
-        <button class="btn btn-ghost menu-toggle" id="mobile-menu-btn" type="button" aria-expanded="false" aria-label="Toggle navigation">
-          Menu
-        </button>
-        <div class="menu-panel" id="menu-panel">
-          <div class="menu-header">
-            <span class="menu-title">Menu</span>
-            <button class="btn btn-ghost menu-back" id="menu-back-btn" type="button">Back</button>
-          </div>
-          <nav class="nav">
-            <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
-            <a class="nav-link" data-page="history" href="history.html">History</a>
-            <a class="nav-link" data-page="team" href="team.html">Team</a>
-            <a class="nav-link" data-page="api" href="api.html">API Access</a>
-            <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
-          </nav>
-          <div class="top-actions">
-            <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
-            <div class="user-chip auth-hidden" id="user-chip">
-              <span class="user-dot"></span>
-              <span id="user-name">User</span>
-            </div>
-            <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
-          </div>
+
+        <div class="topbar-logos">
+          <img class="logo-tanuh" src="logos/tanuh_logo.png" alt="TANUH" />
+          <img class="logo-moe" src="logos/MoE_Logo.svg" alt="Ministry of Education" />
+          <img class="logo-iisc" src="logos/IISc_Logo.png" alt="IISc" />
+          <img class="logo-nha" src="logos/NHA_logo.png" alt="National Health Authority" />
         </div>
-      </header>
-
-      <div class="menu-scrim" id="menu-scrim" aria-hidden="true"></div>
-
-      <div class="mobile-topbar">
-        <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
-          <div class="logo-row" aria-hidden="true">
-            <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
-            <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
-            <img class="logo-img logo-iisc" src="logos/IISc_Logo.png" alt="" />
-          </div>
-          <div class="brand-text">
-            <div class="brand-name">Forgensic</div>
-            <div class="brand-sub">Forgery meets forensic clarity</div>
-          </div>
+      </div>
+    </div>
+    <div class="topbar-row-2">
+      <div class="topbar-inner" style="justify-content:center; gap: 16px;">
+        <nav class="tab-nav">
+          <a class="tab-link" href="index.html" data-tab="dashboard">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fill-rule="evenodd"
+                d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                clip-rule="evenodd" />
+            </svg>
+            Forgery Detection
+          </a>
+          <a class="tab-link active" href="team.html" data-tab="team">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+            </svg>
+            About Us
+          </a>
+        </nav>
+        <a class="btn-api" href="api.html">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+            <path fill-rule="evenodd"
+              d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
+              clip-rule="evenodd" />
+          </svg>
+          API Access
         </a>
       </div>
-
-      <div class="banner hidden" id="signin-banner" role="status"></div>
-
-      <main class="main">
-        <section class="page-hero compact">
-          <div>
-            <div class="kicker">Team</div>
-            <h1>Meet the team behind Forgensic.</h1>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-title">Core team</div>
-          <div class="team-grid">
-            <div class="team-card">
-              <div class="team-avatar">Photo</div>
-              <div class="team-name">Full name</div>
-              <div class="team-role">Designation</div>
-            </div>
-            <div class="team-card">
-              <div class="team-avatar">Photo</div>
-              <div class="team-name">Full name</div>
-              <div class="team-role">Designation</div>
-            </div>
-            <div class="team-card">
-              <div class="team-avatar">Photo</div>
-              <div class="team-name">Full name</div>
-              <div class="team-role">Designation</div>
-            </div>
-            <div class="team-card">
-              <div class="team-avatar">Photo</div>
-              <div class="team-name">Full name</div>
-              <div class="team-role">Designation</div>
-            </div>
-            <div class="team-card">
-              <div class="team-avatar">Photo</div>
-              <div class="team-name">Full name</div>
-              <div class="team-role">Designation</div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <footer class="site-footer">
-        <div class="footer-inner">
-          <div class="footer-brand">
-            <img class="footer-logo" src="logos/tanuh_logo.png" alt="TANUH logo" />
-            <div class="footer-title">TANUH</div>
-            <div class="footer-subtitle">The AI Centre of Excellence in Healthcare</div>
-            <div class="footer-address">
-              <div>AI Centre of Excellence in Healthcare</div>
-              <div>Indian Institute of Science</div>
-              <div>Seventh Floor, TCS Smart-X Hub</div>
-              <div>Bengaluru, India - 560 012</div>
-            </div>
-            <div class="footer-contact">
-              <div>Email: <a class="footer-link inline" href="mailto:info@tanuh.ai" title="Email TANUH">info@tanuh.ai</a></div>
-              <div>Telephone: <a class="footer-link inline" href="tel:+918022934106" title="Call TANUH">(080) 2293 4106</a> | <a class="footer-link inline" href="tel:+918022934107" title="Call TANUH">(080) 2293 4107</a></div>
-            </div>
-            <div class="footer-copy">&copy; 2026 by TANUH</div>
-          </div>
-          <div class="footer-column">
-            <div class="footer-heading">Solutions</div>
-            <div class="footer-links">
-              <a class="footer-link" href="#" title="Breast Cancer Detection">Breast Cancer Detection</a>
-              <a class="footer-link" href="#" title="Oral Cancer Screening">Oral Cancer Screening</a>
-              <a class="footer-link" href="#" title="Diabetes Management">Diabetes Management</a>
-              <a class="footer-link" href="#" title="Retinal Disease">Retinal Disease</a>
-              <a class="footer-link" href="#" title="Mental Health">Mental Health</a>
-              <a class="footer-link" href="#" title="Renal Health">Renal Health</a>
-            </div>
-          </div>
-          <div class="footer-column">
-            <div class="footer-heading">Company</div>
-            <div class="footer-links">
-              <a class="footer-link" href="#" title="About">About</a>
-              <a class="footer-link" href="#" title="Team">Team</a>
-              <a class="footer-link" href="#" title="IEC">IEC</a>
-              <a class="footer-link" href="#" title="Careers">Careers</a>
-              <a class="footer-link" href="#" title="Contact">Contact</a>
-            </div>
-          </div>
-        </div>
-      </footer>
-
-      <nav class="bottom-nav">
-        <a class="bottom-link" data-page="dashboard" href="app.html">Home</a>
-        <a class="bottom-link" data-page="history" href="history.html">History</a>
-        <a class="bottom-link" data-page="team" href="team.html">Team</a>
-        <a class="bottom-link" data-page="api" href="api.html">API</a>
-      </nav>
     </div>
+    <div class="ai-badge-row">
+      <span class="ai-badge"><span class="ai-dot-off"></span>AI OFF</span>
+    </div>
+  </header>
 
-    <div class="modal hidden" id="admin-modal" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <div class="card-title">Admin access</div>
-        <p class="card-meta">Enter admin credentials to unlock monitoring tools.</p>
-        <label for="admin-username">Username</label>
-        <input type="text" id="admin-username" placeholder="admin" />
-        <label for="admin-password">Password</label>
-        <input type="password" id="admin-password" placeholder="password" />
-        <div class="modal-actions">
-          <button class="btn btn-primary" id="admin-submit">Enter admin</button>
-          <button class="btn btn-ghost" id="admin-cancel">Cancel</button>
-        </div>
-        <div class="modal-error" id="admin-error"></div>
+  <main class="main-content">
+    <div class="content-container">
+
+      <!-- About section -->
+      <div class="about-section">
+        <h1 class="about-heading">About Us</h1>
+        <p class="about-body">
+          <a href="https://tanuh.ai" target="_blank">TANUH</a> (Translational Artificial Intelligence for Networked
+          Universal Healthcare) is a Section 8 not-for-profit organization promoted by <a href="https://www.iisc.ac.in"
+            target="_blank">Indian Institute of Science (IISc)</a>. Funded by the Ministry of Education as an AI Centre
+          of Excellence in Healthcare, TANUH is dedicated to advancing the Government of India's vision to <strong>"Make
+            AI in India and Make AI Work for India."</strong>
+        </p>
+        <p class="about-body">
+          <strong>Forgensic</strong> is our document forgery detection system developed for the <strong>NHA NHCX
+            Hackathon</strong>. It uses classical computer vision and forensic analysis to detect tampering, splicing,
+          and manipulation in clinical documents with explainable bounding-box overlays.
+        </p>
       </div>
+
+      <!-- Team section -->
+      <div class="team-section">
+        <div class="team-section-title">Team Members</div>
+        <div class="team-grid">
+
+          <!-- 1. Nikhil -->
+          <div class="team-card">
+            <div class="team-avatar-wrap">
+              <img class="team-avatar-img" src="logos/nikhil.png" alt="Sai Manikanta Eswar Machara" />
+            </div>
+            <div class="team-info">
+              <div class="team-name">Nikhileswara Rao Sulake</div>
+              <div class="team-role">Engineering Intern</div>
+              <div class="team-org">TANUH</div>
+            </div>
+          </div>
+
+          <!-- 2. Eswar -->
+          <div class="team-card">
+            <div class="team-avatar-wrap">
+              <img class="team-avatar-img" src="logos/eswar.png" alt="Sai Manikanta Eswar Machara" />
+            </div>
+            <div class="team-info">
+              <div class="team-name">Sai Manikanta Eswar Machara</div>
+              <div class="team-role">Engineering Intern</div>
+              <div class="team-org">TANUH</div>
+            </div>
+          </div>
+
+          <!-- 3. Sivalal -->
+          <div class="team-card">
+            <div class="team-avatar-wrap">
+              <img class="team-avatar-img" src="logos/sivalal.png" alt="Sivalal Kethvath" />
+            </div>
+            <div class="team-info">
+              <div class="team-name">Sivalal Kethvath</div>
+              <div class="team-role">Assistant Professor</div>
+              <div class="team-org">RGUKT Nuzvid</div>
+            </div>
+          </div>
+
+          <!-- 4. Ashwin -->
+          <div class="team-card">
+            <div class="team-avatar-wrap">
+              <img class="team-avatar-img" src="logos/ashwin.png" alt="Dr. Ashwin RaajKumar" />
+            </div>
+            <div class="team-info">
+              <div class="team-name">Dr. Ashwin RaajKumar</div>
+              <div class="team-role">Program Manager</div>
+              <div class="team-org">(Breast Cancer Detection, TANUH)</div>
+            </div>
+          </div>
+
+          <!-- 5. Hema -->
+          <div class="team-card">
+            <div class="team-avatar-wrap">
+              <img class="team-avatar-img" src="logos/hema.png" alt="Dr. Hema Priyadarshini" />
+            </div>
+            <div class="team-info">
+              <div class="team-name">Dr. Hema Priyadarshini</div>
+              <div class="team-role">Program Manager</div>
+              <div class="team-org">(Chronic Kidney Disease, TANUH)</div>
+            </div>
+          </div>
+
+          <!-- 6. Prof PKY -->
+          <div class="team-card">
+            <div class="team-avatar-wrap">
+              <img class="team-avatar-img" src="logos/Prof_PKY.png" alt="Dr. Phaneendra Yalavarthy" />
+            </div>
+            <div class="team-info">
+              <div class="team-name">Dr. Phaneendra Yalavarthy</div>
+              <div class="team-role">Chief Project Manager</div>
+              <div class="team-org">(TANUH FOUNDATION)</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Contact -->
+      <div class="contact-section">
+        <h2 class="contact-heading">Contact us:</h2>
+        <p class="contact-org"><strong>TANUH: AI Centre of Excellence in Healthcare</strong></p>
+        <p class="contact-detail">Indian Institute of Science</p>
+        <p class="contact-detail">Seventh Floor, TCS Smart-X Hub</p>
+        <p class="contact-detail">Bengaluru, India - 560 012</p>
+        <br />
+        <p class="contact-detail"><strong>Email:</strong> <a class="contact-link"
+            href="mailto:nhcx@tanuh.ai">nhcx@tanuh.ai</a></p>
+        <p class="contact-detail"><strong>Telephone:</strong> (080) 2293 4106 | (080) 2293 4107</p>
+      </div>
+
     </div>
+  </main>
 
-    <div class="toast hidden" id="toast" aria-live="polite"></div>
+  <footer class="site-footer">
+    <div class="footer-stats">© 2026 Forgensic · TANUH Foundation · Indian Institute of Science · Bengaluru, India</div>
+  </footer>
 
-    <script type="module" src="config.js"></script>
-    <script type="module" src="app.js"></script>
-  </body>
+  <div class="toast hidden" id="toast" aria-live="polite"></div>
+  <script type="module" src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+
 </html>

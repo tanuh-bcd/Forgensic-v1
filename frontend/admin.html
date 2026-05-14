@@ -13,7 +13,7 @@
   <body data-page="admin">
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
+        <a class="brand brand-logos" href="index.html" aria-label="Forgensic home">
           <div class="logo-row" aria-hidden="true">
             <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
             <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
@@ -33,27 +33,19 @@
             <button class="btn btn-ghost menu-back" id="menu-back-btn" type="button">Back</button>
           </div>
           <nav class="nav">
-            <a class="nav-link" data-page="dashboard" href="app.html">Dashboard</a>
-            <a class="nav-link" data-page="history" href="history.html">History</a>
+            <a class="nav-link" data-page="dashboard" href="index.html">Dashboard</a>
             <a class="nav-link" data-page="team" href="team.html">Team</a>
             <a class="nav-link" data-page="api" href="api.html">API Access</a>
             <a class="nav-link admin-only hidden" data-page="admin" href="admin.html">Admin</a>
           </nav>
-          <div class="top-actions">
-            <button class="btn btn-ghost auth-hidden" id="admin-login-btn">Admin login</button>
-            <div class="user-chip auth-hidden" id="user-chip">
-              <span class="user-dot"></span>
-              <span id="user-name">User</span>
-            </div>
-            <button class="btn btn-ghost auth-hidden" id="top-logout-btn">Sign out</button>
-          </div>
+          <div class="top-actions"></div>
         </div>
       </header>
 
       <div class="menu-scrim" id="menu-scrim" aria-hidden="true"></div>
 
       <div class="mobile-topbar">
-        <a class="brand brand-logos" href="app.html" aria-label="Forgensic home">
+        <a class="brand brand-logos" href="index.html" aria-label="Forgensic home">
           <div class="logo-row" aria-hidden="true">
             <img class="logo-img logo-tanuh" src="logos/tanuh_logo.png" alt="" />
             <img class="logo-img logo-moe" src="logos/MoE_Logo.svg" alt="" />
@@ -66,7 +58,6 @@
         </a>
       </div>
 
-      <div class="banner hidden" id="signin-banner" role="status"></div>
 
       <main class="main">
         <section class="page-hero compact">
@@ -79,8 +70,8 @@
 
         <section class="admin-locked" id="admin-locked">
           <div class="card">
-            <div class="card-title">Admin access required</div>
-            <p class="card-meta">Use the admin login button in the top bar to unlock system analytics.</p>
+            <div class="card-title">Admin console disabled</div>
+            <p class="card-meta">Admin-only analytics are disabled in this build.</p>
           </div>
         </section>
 
@@ -143,27 +134,10 @@
       </footer>
 
       <nav class="bottom-nav">
-        <a class="bottom-link" data-page="dashboard" href="app.html">Home</a>
-        <a class="bottom-link" data-page="history" href="history.html">History</a>
+        <a class="bottom-link" data-page="dashboard" href="index.html">Home</a>
         <a class="bottom-link" data-page="team" href="team.html">Team</a>
         <a class="bottom-link" data-page="api" href="api.html">API</a>
       </nav>
-    </div>
-
-    <div class="modal hidden" id="admin-modal" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <div class="card-title">Admin access</div>
-        <p class="card-meta">Enter admin credentials to unlock monitoring tools.</p>
-        <label for="admin-username">Username</label>
-        <input type="text" id="admin-username" placeholder="admin" />
-        <label for="admin-password">Password</label>
-        <input type="password" id="admin-password" placeholder="password" />
-        <div class="modal-actions">
-          <button class="btn btn-primary" id="admin-submit">Enter admin</button>
-          <button class="btn btn-ghost" id="admin-cancel">Cancel</button>
-        </div>
-        <div class="modal-error" id="admin-error"></div>
-      </div>
     </div>
 
     <div class="toast hidden" id="toast" aria-live="polite"></div>
