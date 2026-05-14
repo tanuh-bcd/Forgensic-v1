@@ -1,3 +1,4 @@
+import copy
 import difflib
 import json
 import math
@@ -92,6 +93,7 @@ class DocumentPage:
     image_path: Optional[str] = None
     image_width: Optional[int] = None
     image_height: Optional[int] = None
+    preview_path: Optional[str] = None
 
 
 @dataclass
@@ -282,12 +284,14 @@ def build_findings_summary(
     merge_gap: int = 8,
     padding: int = 10,
     ocr_config: str = "--oem 3 --psm 6",
+    max_per_page: int = 5,
+    min_area_ratio: float = 0.003,
 ) -> Dict[str, Any]:
     tesseract_cmd = _resolve_tesseract_cmd()
     ocr_active = OCR_ENABLED and pytesseract is not None and Image is not None
 
     page_map = {p.page_file_name: p for p in pages}
-    groups: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    page_candidates: Dict[int, List[Dict[str, Any]]] = {}
     merge_stats: List[Dict[str, Any]] = []
 
     total_clusters = 0
@@ -305,6 +309,7 @@ def build_findings_summary(
         try:
             with Image.open(image_path).convert("RGB") as image:
                 width, height = image.width, image.height
+                page_area = float(width * height) if width and height else 0.0
                 boxes_by_category: Dict[str, List[Tuple[int, int, int, int]]] = {}
                 for region in res.detected_regions:
                     box = (region.x, region.y, region.x + region.w, region.y + region.h)
@@ -325,7 +330,11 @@ def build_findings_summary(
                         total_clusters += 1
                         source_boxes += cluster["count"]
 
-                        padded = _pad_box(cluster["box"], padding, width, height)
+                        box = cluster["box"]
+                        box_area = max(0, (box[2] - box[0]) * (box[3] - box[1]))
+                        area_ratio = box_area / page_area if page_area else 0.0
+
+                        padded = _pad_box(box, padding, width, height)
                         ocr_text = _ocr_text_for_box(image, padded, ocr_config) if ocr_active else ""
                         snippet = _short_phrase(_clean_snippet(ocr_text))
                         if snippet:
@@ -336,61 +345,66 @@ def build_findings_summary(
                         category_label = CATEGORY_FALLBACK_LABELS.get(
                             category_id, CATEGORY_IDS.get(category_id, category_id)
                         )
-                        label = context or category_label
-                        location = _box_location(cluster["box"], width, height)
+                        location = _box_location(box, width, height)
 
-                        key = (res.page_number, category_id)
-                        entry = groups.get(key)
-                        if entry is None:
-                            entry = {
+                        page_candidates.setdefault(res.page_number, []).append(
+                            {
                                 "page": res.page_number,
                                 "category_id": category_id,
                                 "category_label": category_label,
-                                "label": label,
                                 "location": location,
-                                "count": 0,
-                                "snippets": [],
+                                "snippet": snippet or None,
                                 "from_ocr": bool(context),
-                                "top_count": 0,
+                                "box": {
+                                    "x": int(box[0]),
+                                    "y": int(box[1]),
+                                    "w": int(box[2] - box[0]),
+                                    "h": int(box[3] - box[1]),
+                                },
+                                "area": box_area,
+                                "area_ratio": area_ratio,
                             }
-                            groups[key] = entry
-
-                        entry["count"] += cluster["count"]
-                        if snippet:
-                            entry["snippets"].append(snippet)
-                        if cluster["count"] > entry["top_count"]:
-                            entry["top_count"] = cluster["count"]
-                            entry["location"] = location
+                        )
 
         except Exception:
             continue
 
     findings: List[Dict[str, Any]] = []
-    for entry in sorted(groups.values(), key=lambda e: (e["page"], e["category_id"])):
-        snippet = _best_snippet(entry["snippets"])
-        category_label = entry["category_label"]
-        if snippet:
-            summary = f"Page {entry['page']}: {category_label} near \"{snippet}\" appears altered."
-        else:
-            summary = f"Page {entry['page']}: {category_label} in {entry['location']} appears altered."
-        findings.append(
-            {
-                "page": entry["page"],
-                "category_id": entry["category_id"],
-                "category_label": category_label,
-                "snippet": snippet or None,
-                "location": entry["location"],
-                "summary": summary,
-            }
-        )
+    for page_number in sorted(page_candidates.keys()):
+        candidates = page_candidates[page_number]
+        filtered = [item for item in candidates if item["area_ratio"] >= min_area_ratio]
+        filtered.sort(key=lambda item: item["area"], reverse=True)
+        selected = filtered[:max_per_page] if max_per_page > 0 else filtered
+        for item in selected:
+            snippet = item.get("snippet")
+            category_label = item.get("category_label")
+            if snippet:
+                summary = f"Page {item['page']}: {category_label} near \"{snippet}\" appears altered."
+            else:
+                summary = f"Page {item['page']}: {category_label} in {item['location']} appears altered."
+            findings.append(
+                {
+                    "page": item["page"],
+                    "category_id": item["category_id"],
+                    "category_label": category_label,
+                    "snippet": snippet,
+                    "location": item["location"],
+                    "box": item.get("box"),
+                    "summary": summary,
+                }
+            )
 
     summary_text = "\n".join(item["summary"] for item in findings)
+    if not summary_text.strip():
+        summary_text = "No forgery detected."
 
     sanity = {
         "ocr_active": ocr_active,
         "tesseract_cmd": tesseract_cmd,
         "merge_gap": merge_gap,
         "padding": padding,
+        "max_per_page": max_per_page,
+        "min_area_ratio": min_area_ratio,
         "pages": len(pages),
         "results": len(results),
         "clusters": total_clusters,
@@ -405,6 +419,198 @@ def build_findings_summary(
         "sanity": sanity,
         "merge_stats": merge_stats,
     }
+
+
+def apply_npv_focus_filter(
+    page: DocumentPage,
+    predicted_categories: List[str],
+    regions: List[DetectedRegion],
+    filter_config: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[str], List[DetectedRegion]]:
+    if not regions:
+        return predicted_categories or ["C10"], regions or []
+    if page.image_width is None or page.image_height is None:
+        return predicted_categories, regions
+
+    config = filter_config or NPV_FOCUS_FILTER
+    focus_categories = set(config.get("focus_categories", []))
+    min_area_ratio = float(config.get("min_area_ratio", 0.02))
+    min_regions = int(config.get("min_regions", 4))
+
+    page_area = float(page.image_width * page.image_height)
+    category_area: Dict[str, float] = {}
+    category_count: Dict[str, int] = {}
+    for region in regions:
+        area = float(region.w * region.h)
+        category_area[region.category_id] = category_area.get(region.category_id, 0.0) + area
+        category_count[region.category_id] = category_count.get(region.category_id, 0) + 1
+
+    keep_regions: List[DetectedRegion] = []
+    for region in regions:
+        cat = region.category_id
+        if cat in focus_categories:
+            ratio = category_area.get(cat, 0.0) / page_area
+            if category_count.get(cat, 0) < min_regions or ratio < min_area_ratio:
+                continue
+        keep_regions.append(region)
+
+    keep_categories: List[str] = []
+    for cat in predicted_categories:
+        if cat in focus_categories:
+            ratio = category_area.get(cat, 0.0) / page_area
+            if category_count.get(cat, 0) < min_regions or ratio < min_area_ratio:
+                continue
+        keep_categories.append(cat)
+
+    keep_categories = normalize_category_list(keep_categories)
+    if "C10" in keep_categories and len(keep_categories) > 1:
+        keep_categories = [cat for cat in keep_categories if cat != "C10"]
+    if not keep_categories:
+        keep_categories = ["C10"]
+
+    return keep_categories, keep_regions
+
+
+def _hex_to_rgb(value: str) -> Tuple[int, int, int]:
+    value = value.lstrip("#")
+    if len(value) != 6:
+        return (20, 134, 140)
+    return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _draw_dashed_rect(
+    draw: "ImageDraw.ImageDraw",
+    box: Tuple[int, int, int, int],
+    color: Tuple[int, int, int, int],
+    width: int = 2,
+    dash: int = 7,
+    gap: int = 4,
+) -> None:
+    x1, y1, x2, y2 = box
+    if x2 <= x1 or y2 <= y1:
+        return
+
+    def _draw_dashed_line(xa: int, ya: int, xb: int, yb: int) -> None:
+        if xa == xb:
+            start = min(ya, yb)
+            end = max(ya, yb)
+            pos = start
+            while pos < end:
+                seg_end = min(pos + dash, end)
+                draw.line([(xa, pos), (xb, seg_end)], fill=color, width=width)
+                pos += dash + gap
+        else:
+            start = min(xa, xb)
+            end = max(xa, xb)
+            pos = start
+            while pos < end:
+                seg_end = min(pos + dash, end)
+                draw.line([(pos, ya), (seg_end, yb)], fill=color, width=width)
+                pos += dash + gap
+
+    _draw_dashed_line(x1, y1, x2, y1)
+    _draw_dashed_line(x1, y2, x2, y2)
+    _draw_dashed_line(x1, y1, x1, y2)
+    _draw_dashed_line(x2, y1, x2, y2)
+
+
+def render_preview_image(
+    page: DocumentPage,
+    result: PageAnalysisResult,
+    output_dir: Path,
+    merge_gap: int = 8,
+    padding: int = 10,
+) -> Optional[str]:
+    if Image is None:
+        return None
+    image_path = page.image_path or page.original_path
+    if not image_path:
+        return None
+    try:
+        from PIL import ImageDraw, ImageFont
+    except Exception:
+        return None
+
+    path = Path(image_path)
+    if not path.exists():
+        return None
+
+    try:
+        base = Image.open(path).convert("RGBA")
+    except Exception:
+        return None
+
+    overlay = Image.new("RGBA", base.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 14)
+    except Exception:
+        font = ImageFont.load_default()
+
+    palette = [
+        "#14868C",
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+    ]
+    color_map: Dict[str, str] = {}
+
+    boxes_by_category: Dict[str, List[Tuple[int, int, int, int]]] = {}
+    for region in result.detected_regions:
+        box = (region.x, region.y, region.x + region.w, region.y + region.h)
+        boxes_by_category.setdefault(region.category_id, []).append(box)
+
+    for category_id, boxes in boxes_by_category.items():
+        color = color_map.get(category_id)
+        if color is None:
+            color = palette[len(color_map) % len(palette)]
+            color_map[category_id] = color
+        rgb = _hex_to_rgb(color)
+        stroke = (rgb[0], rgb[1], rgb[2], 255)
+
+        clusters = _merge_boxes(boxes, merge_gap)
+        for cluster in clusters:
+            x1, y1, x2, y2 = cluster["box"]
+            draw.rectangle([x1, y1, x2, y2], outline=stroke, width=3)
+
+            px1, py1, px2, py2 = _pad_box(cluster["box"], padding, base.width, base.height)
+            _draw_dashed_rect(draw, (px1, py1, px2, py2), stroke, width=2)
+
+            label = f"{category_id} x{cluster['count']}"
+            try:
+                text_box = draw.textbbox((0, 0), label, font=font)
+                text_w = text_box[2] - text_box[0]
+                text_h = text_box[3] - text_box[1]
+            except Exception:
+                text_w, text_h = draw.textsize(label, font=font)
+
+            pad = 3
+            label_x = max(2, int(x1))
+            label_y = max(2, int(y1 - text_h - pad * 2 - 2))
+            draw.rectangle(
+                [label_x, label_y, label_x + text_w + pad * 2, label_y + text_h + pad * 2],
+                fill=(255, 255, 255, 210),
+                outline=stroke,
+                width=1,
+            )
+            draw.text((label_x + pad, label_y + pad), label, fill=stroke, font=font)
+
+    combined = Image.alpha_composite(base, overlay).convert("RGB")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_name = f"preview_{Path(page.page_file_name).stem}.jpg"
+    out_path = output_dir / out_name
+    try:
+        combined.save(out_path, "JPEG", quality=92)
+    except Exception:
+        return None
+    return str(out_path)
 
 
 # =========================
@@ -1108,7 +1314,95 @@ def _ai_region_coverage(
 # =========================
 DETECTOR_TUNING = { 'hyper_loose': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 5000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.95, 'cluster_bin_size': 14.0, 'min_cluster_pairs': 4, 'min_keypoints': 8, 'min_area': 120, 'min_strength': 6, 'ocr_similarity': 0.35 }, 'c2': { 'canny_low': 40, 'canny_high': 140, 'edge_z': 1.2, 'stroke_z': 1.2, 'ocr_edge_density': 0.1, 'min_region_area': 40, 'min_line_components': 1, 'component_min_area': 40 }, 'c3': { 'component_min_area': 80, 'min_candidate_area': 100, 'stamp_circularity': 0.3, 'stamp_fill': 0.12, 'signature_aspect': 1.6, 'signature_fill_max': 0.5, 'fill_min': 0.2, 'ocr_min_area': 60, 'min_region_area': 60 }, 'c4': { 'gap_min_abs': 4.0, 'gap_median_mult': 0.9, 'gap_token_width_mult': 0.25, 'smooth_percentile': 65, 'smooth_min_area': 40, 'smooth_min_dim': 3, 'score_threshold': 0.6, 'min_region_area': 40, 'ring_var_ratio': 0.98, 'ring_grad_ratio': 0.95, 'ring_res_ratio': 0.98, 'ring_fg_delta': 0.005, 'erased_text_bonus': 0.9 }, 'c5': { 'row_density_thresh': 0.006, 'col_density_thresh': 0.003, 'gap_thresh_px': 6, 'gap_thresh_ratio': 0.03, 'band_min_height_px': 8, 'band_min_height_ratio': 0.03, 'band_min_width': 20, 'min_header_height_ratio': 0.04, 'cue_threshold': 0.12, 'cue_count_min': 1, 'score_threshold': 0.6, 'dist_balance_max': 0.35, 'dist_min': 0.3, 'min_region_area': 150 }, 'c6': { 'var_percentile': 55, 'grad_percentile': 55, 'res_percentile': 55, 'candidate_density_min': 0.0005, 'canny_low': 15, 'canny_high': 70, 'hough_threshold': 30, 'hough_min_len_ratio': 0.04, 'hough_min_len_px': 20, 'hough_max_gap': 28, 'diag_angle_min': 10.0, 'diag_angle_max': 80.0, 'diag_ratio_min': 0.15, 'diag_count_min': 2, 'periodicity_min': 1.3, 'contour_area_min': 50, 'aspect_min': 1.2, 'angle_delta_max': 60.0, 'box_area_min': 80, 'fallback_box_area_min': 250 }, 'c7': { 'min_tokens_page': 1, 'min_tokens_per_line': 1, 'min_gaps_per_line': 1, 'med_gap_min': 1.5, 'mad_gap_min': 0.5, 'gap_cv_max': 1.2, 'min_token_width': 2, 'large_gap_min_abs': 5.0, 'large_gap_median_mult': 1.2, 'large_gap_z': 1.5, 'large_gap_line_ratio_max': 0.45, 'tight_gap_median_mult': 0.7, 'tight_gap_median_min': 3.0, 'tight_gap_z': -1.2, 'single_gap_median_mult': 2.0, 'single_gap_min_abs': 7.0, 'single_gap_min_tokens': 3, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.002, 'bg_var_ratio_max': 0.85, 'bg_res_ratio_max': 0.85, 'bg_grad_ratio_max': 0.95, 'stroke_cv_max': 0.4, 'height_cv_max': 0.3, 'spec_peak_min': 5.0, 'spec_highfreq_min': 1.2, 'spec_flatness_min': 0.35, 'bg_res_ratio_flatness_max': 0.92, 'coverage_min': 0.15, 'line_coverage_min': 0.25, 'coverage_high_min': 0.35, 'score_threshold': 1.4 }, 'c9': { 'canny_low': 35, 'canny_high': 100, 'min_token_area_line': 40, 'min_token_area_susp': 60, 'min_line_tokens': 1, 'z_edge': 1.4, 'z_grad': 1.4, 'z_res': 1.4, 'z_var': 1.4, 'z_stroke': 1.4, 'z_height': 1.6, 'ring_ratio_low': 0.95, 'ring_ratio_high': 1.15, 'fft_peak_min': 5.0, 'fft_ratio_min': 1.1, 'score_threshold': 1.4, 'min_region_area': 60, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 2, 'pad_y_min': 2 } }, 'current': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.75, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 12, 'min_keypoints': 20, 'min_area': 400, 'min_strength': 18, 'ocr_similarity': 0.65 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 2.5, 'stroke_z': 2.5, 'ocr_edge_density': 0.25, 'min_region_area': 150, 'min_line_components': 3, 'component_min_area': 120 }, 'c3': { 'component_min_area': 200, 'min_candidate_area': 300, 'stamp_circularity': 0.55, 'stamp_fill': 0.25, 'signature_aspect': 3.5, 'signature_fill_max': 0.25, 'fill_min': 0.4, 'ocr_min_area': 150, 'min_region_area': 150 }, 'c4': { 'gap_min_abs': 12.0, 'gap_median_mult': 1.6, 'gap_token_width_mult': 0.55, 'smooth_percentile': 35, 'smooth_min_area': 150, 'smooth_min_dim': 6, 'score_threshold': 2.0, 'min_region_area': 120, 'ring_var_ratio': 0.75, 'ring_grad_ratio': 0.72, 'ring_res_ratio': 0.8, 'ring_fg_delta': 0.05, 'erased_text_bonus': 0.6 }, 'c5': { 'row_density_thresh': 0.015, 'col_density_thresh': 0.01, 'gap_thresh_px': 12, 'gap_thresh_ratio': 0.06, 'band_min_height_px': 18, 'band_min_height_ratio': 0.06, 'band_min_width': 40, 'min_header_height_ratio': 0.08, 'cue_threshold': 0.25, 'cue_count_min': 2, 'score_threshold': 1.4, 'dist_balance_max': 0.15, 'dist_min': 0.6, 'min_region_area': 400 }, 'c6': { 'var_percentile': 30, 'grad_percentile': 30, 'res_percentile': 35, 'candidate_density_min': 0.003, 'canny_low': 40, 'canny_high': 120, 'hough_threshold': 60, 'hough_min_len_ratio': 0.08, 'hough_min_len_px': 40, 'hough_max_gap': 15, 'diag_angle_min': 20.0, 'diag_angle_max': 70.0, 'diag_ratio_min': 0.3, 'diag_count_min': 6, 'periodicity_min': 2.5, 'contour_area_min': 180, 'aspect_min': 2.0, 'angle_delta_max': 30.0, 'box_area_min': 200, 'fallback_box_area_min': 600 }, 'c7': { 'min_tokens_page': 4, 'min_tokens_per_line': 4, 'min_gaps_per_line': 3, 'med_gap_min': 4.0, 'mad_gap_min': 1.0, 'gap_cv_max': 0.8, 'min_token_width': 6, 'large_gap_min_abs': 12.0, 'large_gap_median_mult': 2.0, 'large_gap_z': 3.0, 'large_gap_line_ratio_max': 0.28, 'tight_gap_median_mult': 0.45, 'tight_gap_median_min': 8.0, 'tight_gap_z': -2.5, 'single_gap_median_mult': 3.5, 'single_gap_min_abs': 18.0, 'single_gap_min_tokens': 6, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.008, 'bg_var_ratio_max': 0.6, 'bg_res_ratio_max': 0.6, 'bg_grad_ratio_max': 0.7, 'stroke_cv_max': 0.22, 'height_cv_max': 0.18, 'spec_peak_min': 10.0, 'spec_highfreq_min': 2.2, 'spec_flatness_min': 0.48, 'bg_res_ratio_flatness_max': 0.75, 'coverage_min': 0.35, 'line_coverage_min': 0.5, 'coverage_high_min': 0.6, 'score_threshold': 2.8 }, 'c9': { 'canny_low': 60, 'canny_high': 160, 'min_token_area_line': 90, 'min_token_area_susp': 120, 'min_line_tokens': 3, 'z_edge': 2.6, 'z_grad': 2.6, 'z_res': 2.6, 'z_var': 2.6, 'z_stroke': 2.6, 'z_height': 2.8, 'ring_ratio_low': 0.6, 'ring_ratio_high': 1.6, 'fft_peak_min': 10.0, 'fft_ratio_min': 2.0, 'score_threshold': 2.6, 'min_region_area': 160, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'normal': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.73, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 14, 'min_keypoints': 24, 'min_area': 450, 'min_strength': 20, 'ocr_similarity': 0.7 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 2.7, 'stroke_z': 2.7, 'ocr_edge_density': 0.27, 'min_region_area': 170, 'min_line_components': 3, 'component_min_area': 130 }, 'c3': { 'component_min_area': 220, 'min_candidate_area': 340, 'stamp_circularity': 0.58, 'stamp_fill': 0.28, 'signature_aspect': 3.8, 'signature_fill_max': 0.23, 'fill_min': 0.43, 'ocr_min_area': 170, 'min_region_area': 170 }, 'c4': { 'gap_min_abs': 12.0, 'gap_median_mult': 1.75, 'gap_token_width_mult': 0.6, 'smooth_percentile': 33, 'smooth_min_area': 170, 'smooth_min_dim': 7, 'score_threshold': 2.2, 'min_region_area': 140, 'ring_var_ratio': 0.72, 'ring_grad_ratio': 0.7, 'ring_res_ratio': 0.77, 'ring_fg_delta': 0.06, 'erased_text_bonus': 0.55 }, 'c5': { 'row_density_thresh': 0.016, 'col_density_thresh': 0.012, 'gap_thresh_px': 12, 'gap_thresh_ratio': 0.065, 'band_min_height_px': 18, 'band_min_height_ratio': 0.065, 'band_min_width': 40, 'min_header_height_ratio': 0.085, 'cue_threshold': 0.27, 'cue_count_min': 2, 'score_threshold': 1.5, 'dist_balance_max': 0.14, 'dist_min': 0.62, 'min_region_area': 440 }, 'c6': { 'var_percentile': 28, 'grad_percentile': 28, 'res_percentile': 32, 'candidate_density_min': 0.0035, 'canny_low': 40, 'canny_high': 120, 'hough_threshold': 62, 'hough_min_len_ratio': 0.085, 'hough_min_len_px': 40, 'hough_max_gap': 14, 'diag_angle_min': 22.0, 'diag_angle_max': 68.0, 'diag_ratio_min': 0.32, 'diag_count_min': 7, 'periodicity_min': 2.7, 'contour_area_min': 200, 'aspect_min': 2.2, 'angle_delta_max': 28.0, 'box_area_min': 240, 'fallback_box_area_min': 700 }, 'c7': { 'min_tokens_page': 4, 'min_tokens_per_line': 4, 'min_gaps_per_line': 3, 'med_gap_min': 4.5, 'mad_gap_min': 1.1, 'gap_cv_max': 0.75, 'min_token_width': 6, 'large_gap_min_abs': 13.0, 'large_gap_median_mult': 2.2, 'large_gap_z': 3.2, 'large_gap_line_ratio_max': 0.26, 'tight_gap_median_mult': 0.4, 'tight_gap_median_min': 9.0, 'tight_gap_z': -2.7, 'single_gap_median_mult': 3.7, 'single_gap_min_abs': 20.0, 'single_gap_min_tokens': 6, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.009, 'bg_var_ratio_max': 0.58, 'bg_res_ratio_max': 0.58, 'bg_grad_ratio_max': 0.68, 'stroke_cv_max': 0.2, 'height_cv_max': 0.17, 'spec_peak_min': 11.0, 'spec_highfreq_min': 2.4, 'spec_flatness_min': 0.5, 'bg_res_ratio_flatness_max': 0.72, 'coverage_min': 0.38, 'line_coverage_min': 0.55, 'coverage_high_min': 0.65, 'score_threshold': 3.0 }, 'c9': { 'canny_low': 60, 'canny_high': 160, 'min_token_area_line': 100, 'min_token_area_susp': 140, 'min_line_tokens': 3, 'z_edge': 2.8, 'z_grad': 2.8, 'z_res': 2.8, 'z_var': 2.8, 'z_stroke': 2.8, 'z_height': 3.0, 'ring_ratio_low': 0.58, 'ring_ratio_high': 1.62, 'fft_peak_min': 11.0, 'fft_ratio_min': 2.2, 'score_threshold': 2.8, 'min_region_area': 180, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'strict': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.7, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 16, 'min_keypoints': 28, 'min_area': 500, 'min_strength': 22, 'ocr_similarity': 0.75 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 3.0, 'stroke_z': 3.0, 'ocr_edge_density': 0.3, 'min_region_area': 200, 'min_line_components': 4, 'component_min_area': 140 }, 'c3': { 'component_min_area': 250, 'min_candidate_area': 380, 'stamp_circularity': 0.62, 'stamp_fill': 0.3, 'signature_aspect': 4.2, 'signature_fill_max': 0.22, 'fill_min': 0.46, 'ocr_min_area': 190, 'min_region_area': 190 }, 'c4': { 'gap_min_abs': 14.0, 'gap_median_mult': 2.0, 'gap_token_width_mult': 0.7, 'smooth_percentile': 30, 'smooth_min_area': 220, 'smooth_min_dim': 8, 'score_threshold': 2.6, 'min_region_area': 180, 'ring_var_ratio': 0.68, 'ring_grad_ratio': 0.66, 'ring_res_ratio': 0.72, 'ring_fg_delta': 0.08, 'erased_text_bonus': 0.5 }, 'c5': { 'row_density_thresh': 0.018, 'col_density_thresh': 0.015, 'gap_thresh_px': 12, 'gap_thresh_ratio': 0.07, 'band_min_height_px': 18, 'band_min_height_ratio': 0.07, 'band_min_width': 40, 'min_header_height_ratio': 0.095, 'cue_threshold': 0.3, 'cue_count_min': 2, 'score_threshold': 1.7, 'dist_balance_max': 0.12, 'dist_min': 0.7, 'min_region_area': 520 }, 'c6': { 'var_percentile': 25, 'grad_percentile': 25, 'res_percentile': 30, 'candidate_density_min': 0.0045, 'canny_low': 45, 'canny_high': 130, 'hough_threshold': 65, 'hough_min_len_ratio': 0.09, 'hough_min_len_px': 40, 'hough_max_gap': 12, 'diag_angle_min': 24.0, 'diag_angle_max': 66.0, 'diag_ratio_min': 0.35, 'diag_count_min': 8, 'periodicity_min': 3.0, 'contour_area_min': 240, 'aspect_min': 2.4, 'angle_delta_max': 25.0, 'box_area_min': 280, 'fallback_box_area_min': 800 }, 'c7': { 'min_tokens_page': 4, 'min_tokens_per_line': 5, 'min_gaps_per_line': 3, 'med_gap_min': 5.0, 'mad_gap_min': 1.2, 'gap_cv_max': 0.7, 'min_token_width': 6, 'large_gap_min_abs': 14.0, 'large_gap_median_mult': 2.4, 'large_gap_z': 3.5, 'large_gap_line_ratio_max': 0.24, 'tight_gap_median_mult': 0.38, 'tight_gap_median_min': 10.0, 'tight_gap_z': -3.0, 'single_gap_median_mult': 4.0, 'single_gap_min_abs': 22.0, 'single_gap_min_tokens': 6, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.01, 'bg_var_ratio_max': 0.55, 'bg_res_ratio_max': 0.55, 'bg_grad_ratio_max': 0.65, 'stroke_cv_max': 0.18, 'height_cv_max': 0.16, 'spec_peak_min': 12.0, 'spec_highfreq_min': 2.6, 'spec_flatness_min': 0.52, 'bg_res_ratio_flatness_max': 0.7, 'coverage_min': 0.42, 'line_coverage_min': 0.6, 'coverage_high_min': 0.7, 'score_threshold': 3.3 }, 'c9': { 'canny_low': 60, 'canny_high': 160, 'min_token_area_line': 110, 'min_token_area_susp': 160, 'min_line_tokens': 4, 'z_edge': 3.0, 'z_grad': 3.0, 'z_res': 3.0, 'z_var': 3.0, 'z_stroke': 3.0, 'z_height': 3.2, 'ring_ratio_low': 0.55, 'ring_ratio_high': 1.65, 'fft_peak_min': 12.0, 'fft_ratio_min': 2.4, 'score_threshold': 3.1, 'min_region_area': 200, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'very_strict': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.68, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 20, 'min_keypoints': 32, 'min_area': 600, 'min_strength': 25, 'ocr_similarity': 0.8 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 3.5, 'stroke_z': 3.5, 'ocr_edge_density': 0.35, 'min_region_area': 240, 'min_line_components': 4, 'component_min_area': 160 }, 'c3': { 'component_min_area': 280, 'min_candidate_area': 420, 'stamp_circularity': 0.66, 'stamp_fill': 0.33, 'signature_aspect': 4.6, 'signature_fill_max': 0.2, 'fill_min': 0.5, 'ocr_min_area': 220, 'min_region_area': 220 }, 'c4': { 'gap_min_abs': 16.0, 'gap_median_mult': 2.4, 'gap_token_width_mult': 0.75, 'smooth_percentile': 25, 'smooth_min_area': 280, 'smooth_min_dim': 10, 'score_threshold': 3.0, 'min_region_area': 220, 'ring_var_ratio': 0.62, 'ring_grad_ratio': 0.6, 'ring_res_ratio': 0.65, 'ring_fg_delta': 0.1, 'erased_text_bonus': 0.4 }, 'c5': { 'row_density_thresh': 0.02, 'col_density_thresh': 0.018, 'gap_thresh_px': 12, 'gap_thresh_ratio': 0.075, 'band_min_height_px': 18, 'band_min_height_ratio': 0.075, 'band_min_width': 40, 'min_header_height_ratio': 0.11, 'cue_threshold': 0.34, 'cue_count_min': 2, 'score_threshold': 2.0, 'dist_balance_max': 0.1, 'dist_min': 0.75, 'min_region_area': 600 }, 'c6': { 'var_percentile': 22, 'grad_percentile': 22, 'res_percentile': 27, 'candidate_density_min': 0.006, 'canny_low': 50, 'canny_high': 140, 'hough_threshold': 70, 'hough_min_len_ratio': 0.095, 'hough_min_len_px': 40, 'hough_max_gap': 10, 'diag_angle_min': 26.0, 'diag_angle_max': 64.0, 'diag_ratio_min': 0.38, 'diag_count_min': 10, 'periodicity_min': 3.4, 'contour_area_min': 280, 'aspect_min': 2.8, 'angle_delta_max': 22.0, 'box_area_min': 340, 'fallback_box_area_min': 900 }, 'c7': { 'min_tokens_page': 4, 'min_tokens_per_line': 5, 'min_gaps_per_line': 3, 'med_gap_min': 6.0, 'mad_gap_min': 1.4, 'gap_cv_max': 0.65, 'min_token_width': 6, 'large_gap_min_abs': 16.0, 'large_gap_median_mult': 2.6, 'large_gap_z': 3.8, 'large_gap_line_ratio_max': 0.22, 'tight_gap_median_mult': 0.35, 'tight_gap_median_min': 11.0, 'tight_gap_z': -3.2, 'single_gap_median_mult': 4.4, 'single_gap_min_abs': 24.0, 'single_gap_min_tokens': 6, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.012, 'bg_var_ratio_max': 0.52, 'bg_res_ratio_max': 0.52, 'bg_grad_ratio_max': 0.62, 'stroke_cv_max': 0.16, 'height_cv_max': 0.15, 'spec_peak_min': 13.5, 'spec_highfreq_min': 2.8, 'spec_flatness_min': 0.54, 'bg_res_ratio_flatness_max': 0.68, 'coverage_min': 0.48, 'line_coverage_min': 0.65, 'coverage_high_min': 0.75, 'score_threshold': 3.6 }, 'c9': { 'canny_low': 60, 'canny_high': 160, 'min_token_area_line': 130, 'min_token_area_susp': 180, 'min_line_tokens': 4, 'z_edge': 3.3, 'z_grad': 3.3, 'z_res': 3.3, 'z_var': 3.3, 'z_stroke': 3.3, 'z_height': 3.4, 'ring_ratio_low': 0.52, 'ring_ratio_high': 1.7, 'fft_peak_min': 13.0, 'fft_ratio_min': 2.7, 'score_threshold': 3.4, 'min_region_area': 220, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'loose': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.8, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 9, 'min_keypoints': 16, 'min_area': 300, 'min_strength': 14, 'ocr_similarity': 0.55 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 2.0, 'stroke_z': 2.0, 'ocr_edge_density': 0.2, 'min_region_area': 120, 'min_line_components': 2, 'component_min_area': 100 }, 'c3': { 'component_min_area': 160, 'min_candidate_area': 240, 'stamp_circularity': 0.5, 'stamp_fill': 0.22, 'signature_aspect': 3.0, 'signature_fill_max': 0.3, 'fill_min': 0.35, 'ocr_min_area': 120, 'min_region_area': 120 }, 'c4': { 'gap_min_abs': 10.0, 'gap_median_mult': 1.3, 'gap_token_width_mult': 0.45, 'smooth_percentile': 45, 'smooth_min_area': 120, 'smooth_min_dim': 5, 'score_threshold': 1.6, 'min_region_area': 100, 'ring_var_ratio': 0.82, 'ring_grad_ratio': 0.8, 'ring_res_ratio': 0.85, 'ring_fg_delta': 0.03, 'erased_text_bonus': 0.7 }, 'c5': { 'row_density_thresh': 0.012, 'col_density_thresh': 0.008, 'gap_thresh_px': 10, 'gap_thresh_ratio': 0.05, 'band_min_height_px': 16, 'band_min_height_ratio': 0.05, 'band_min_width': 35, 'min_header_height_ratio': 0.07, 'cue_threshold': 0.22, 'cue_count_min': 2, 'score_threshold': 1.2, 'dist_balance_max': 0.2, 'dist_min': 0.5, 'min_region_area': 320 }, 'c6': { 'var_percentile': 35, 'grad_percentile': 35, 'res_percentile': 40, 'candidate_density_min': 0.002, 'canny_low': 35, 'canny_high': 110, 'hough_threshold': 55, 'hough_min_len_ratio': 0.07, 'hough_min_len_px': 35, 'hough_max_gap': 18, 'diag_angle_min': 18.0, 'diag_angle_max': 72.0, 'diag_ratio_min': 0.25, 'diag_count_min': 5, 'periodicity_min': 2.1, 'contour_area_min': 140, 'aspect_min': 1.8, 'angle_delta_max': 35.0, 'box_area_min': 160, 'fallback_box_area_min': 500 }, 'c7': { 'min_tokens_page': 3, 'min_tokens_per_line': 3, 'min_gaps_per_line': 2, 'med_gap_min': 3.5, 'mad_gap_min': 0.9, 'gap_cv_max': 0.85, 'min_token_width': 5, 'large_gap_min_abs': 10.0, 'large_gap_median_mult': 1.7, 'large_gap_z': 2.6, 'large_gap_line_ratio_max': 0.32, 'tight_gap_median_mult': 0.5, 'tight_gap_median_min': 6.0, 'tight_gap_z': -2.1, 'single_gap_median_mult': 3.0, 'single_gap_min_abs': 14.0, 'single_gap_min_tokens': 5, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.006, 'bg_var_ratio_max': 0.65, 'bg_res_ratio_max': 0.65, 'bg_grad_ratio_max': 0.75, 'stroke_cv_max': 0.26, 'height_cv_max': 0.2, 'spec_peak_min': 9.0, 'spec_highfreq_min': 2.0, 'spec_flatness_min': 0.46, 'bg_res_ratio_flatness_max': 0.8, 'coverage_min': 0.3, 'line_coverage_min': 0.45, 'coverage_high_min': 0.55, 'score_threshold': 2.4 }, 'c9': { 'canny_low': 55, 'canny_high': 150, 'min_token_area_line': 80, 'min_token_area_susp': 100, 'min_line_tokens': 2, 'z_edge': 2.2, 'z_grad': 2.2, 'z_res': 2.2, 'z_var': 2.2, 'z_stroke': 2.2, 'z_height': 2.5, 'ring_ratio_low': 0.7, 'ring_ratio_high': 1.4, 'fft_peak_min': 9.0, 'fft_ratio_min': 1.7, 'score_threshold': 2.2, 'min_region_area': 140, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'very_loose': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.85, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 8, 'min_keypoints': 14, 'min_area': 250, 'min_strength': 12, 'ocr_similarity': 0.5 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 1.8, 'stroke_z': 1.8, 'ocr_edge_density': 0.18, 'min_region_area': 100, 'min_line_components': 2, 'component_min_area': 90 }, 'c3': { 'component_min_area': 140, 'min_candidate_area': 210, 'stamp_circularity': 0.45, 'stamp_fill': 0.2, 'signature_aspect': 2.6, 'signature_fill_max': 0.35, 'fill_min': 0.3, 'ocr_min_area': 100, 'min_region_area': 100 }, 'c4': { 'gap_min_abs': 8.0, 'gap_median_mult': 1.15, 'gap_token_width_mult': 0.4, 'smooth_percentile': 50, 'smooth_min_area': 90, 'smooth_min_dim': 4, 'score_threshold': 1.3, 'min_region_area': 80, 'ring_var_ratio': 0.88, 'ring_grad_ratio': 0.86, 'ring_res_ratio': 0.9, 'ring_fg_delta': 0.02, 'erased_text_bonus': 0.75 }, 'c5': { 'row_density_thresh': 0.01, 'col_density_thresh': 0.006, 'gap_thresh_px': 9, 'gap_thresh_ratio': 0.045, 'band_min_height_px': 14, 'band_min_height_ratio': 0.045, 'band_min_width': 32, 'min_header_height_ratio': 0.06, 'cue_threshold': 0.2, 'cue_count_min': 2, 'score_threshold': 1.05, 'dist_balance_max': 0.24, 'dist_min': 0.45, 'min_region_area': 260 }, 'c6': { 'var_percentile': 40, 'grad_percentile': 40, 'res_percentile': 45, 'candidate_density_min': 0.0015, 'canny_low': 30, 'canny_high': 100, 'hough_threshold': 50, 'hough_min_len_ratio': 0.065, 'hough_min_len_px': 30, 'hough_max_gap': 20, 'diag_angle_min': 16.0, 'diag_angle_max': 74.0, 'diag_ratio_min': 0.22, 'diag_count_min': 4, 'periodicity_min': 1.9, 'contour_area_min': 110, 'aspect_min': 1.6, 'angle_delta_max': 40.0, 'box_area_min': 140, 'fallback_box_area_min': 420 }, 'c7': { 'min_tokens_page': 3, 'min_tokens_per_line': 3, 'min_gaps_per_line': 2, 'med_gap_min': 3.0, 'mad_gap_min': 0.8, 'gap_cv_max': 0.9, 'min_token_width': 4, 'large_gap_min_abs': 9.0, 'large_gap_median_mult': 1.5, 'large_gap_z': 2.2, 'large_gap_line_ratio_max': 0.35, 'tight_gap_median_mult': 0.55, 'tight_gap_median_min': 5.0, 'tight_gap_z': -1.8, 'single_gap_median_mult': 2.7, 'single_gap_min_abs': 12.0, 'single_gap_min_tokens': 4, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.005, 'bg_var_ratio_max': 0.7, 'bg_res_ratio_max': 0.7, 'bg_grad_ratio_max': 0.8, 'stroke_cv_max': 0.3, 'height_cv_max': 0.23, 'spec_peak_min': 8.0, 'spec_highfreq_min': 1.8, 'spec_flatness_min': 0.44, 'bg_res_ratio_flatness_max': 0.85, 'coverage_min': 0.25, 'line_coverage_min': 0.4, 'coverage_high_min': 0.5, 'score_threshold': 2.1 }, 'c9': { 'canny_low': 50, 'canny_high': 140, 'min_token_area_line': 70, 'min_token_area_susp': 90, 'min_line_tokens': 2, 'z_edge': 2.0, 'z_grad': 2.0, 'z_res': 2.0, 'z_var': 2.0, 'z_stroke': 2.0, 'z_height': 2.2, 'ring_ratio_low': 0.75, 'ring_ratio_high': 1.3, 'fft_peak_min': 8.0, 'fft_ratio_min': 1.5, 'score_threshold': 2.0, 'min_region_area': 120, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'ultra_loose': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.9, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 6, 'min_keypoints': 12, 'min_area': 200, 'min_strength': 10, 'ocr_similarity': 0.45 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 1.6, 'stroke_z': 1.6, 'ocr_edge_density': 0.16, 'min_region_area': 80, 'min_line_components': 2, 'component_min_area': 80 }, 'c3': { 'component_min_area': 120, 'min_candidate_area': 180, 'stamp_circularity': 0.4, 'stamp_fill': 0.18, 'signature_aspect': 2.2, 'signature_fill_max': 0.38, 'fill_min': 0.28, 'ocr_min_area': 90, 'min_region_area': 90 }, 'c4': { 'gap_min_abs': 7.0, 'gap_median_mult': 1.1, 'gap_token_width_mult': 0.35, 'smooth_percentile': 55, 'smooth_min_area': 70, 'smooth_min_dim': 4, 'score_threshold': 1.1, 'min_region_area': 70, 'ring_var_ratio': 0.92, 'ring_grad_ratio': 0.9, 'ring_res_ratio': 0.93, 'ring_fg_delta': 0.015, 'erased_text_bonus': 0.8 }, 'c5': { 'row_density_thresh': 0.009, 'col_density_thresh': 0.005, 'gap_thresh_px': 8, 'gap_thresh_ratio': 0.04, 'band_min_height_px': 12, 'band_min_height_ratio': 0.04, 'band_min_width': 28, 'min_header_height_ratio': 0.055, 'cue_threshold': 0.18, 'cue_count_min': 2, 'score_threshold': 0.9, 'dist_balance_max': 0.28, 'dist_min': 0.4, 'min_region_area': 220 }, 'c6': { 'var_percentile': 45, 'grad_percentile': 45, 'res_percentile': 50, 'candidate_density_min': 0.001, 'canny_low': 25, 'canny_high': 90, 'hough_threshold': 45, 'hough_min_len_ratio': 0.06, 'hough_min_len_px': 28, 'hough_max_gap': 22, 'diag_angle_min': 15.0, 'diag_angle_max': 75.0, 'diag_ratio_min': 0.2, 'diag_count_min': 4, 'periodicity_min': 1.7, 'contour_area_min': 90, 'aspect_min': 1.5, 'angle_delta_max': 45.0, 'box_area_min': 120, 'fallback_box_area_min': 380 }, 'c7': { 'min_tokens_page': 2, 'min_tokens_per_line': 2, 'min_gaps_per_line': 2, 'med_gap_min': 2.5, 'mad_gap_min': 0.7, 'gap_cv_max': 0.95, 'min_token_width': 4, 'large_gap_min_abs': 8.0, 'large_gap_median_mult': 1.4, 'large_gap_z': 2.0, 'large_gap_line_ratio_max': 0.38, 'tight_gap_median_mult': 0.6, 'tight_gap_median_min': 4.5, 'tight_gap_z': -1.6, 'single_gap_median_mult': 2.4, 'single_gap_min_abs': 10.0, 'single_gap_min_tokens': 4, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.004, 'bg_var_ratio_max': 0.75, 'bg_res_ratio_max': 0.75, 'bg_grad_ratio_max': 0.85, 'stroke_cv_max': 0.34, 'height_cv_max': 0.25, 'spec_peak_min': 7.0, 'spec_highfreq_min': 1.6, 'spec_flatness_min': 0.42, 'bg_res_ratio_flatness_max': 0.88, 'coverage_min': 0.22, 'line_coverage_min': 0.35, 'coverage_high_min': 0.45, 'score_threshold': 1.9 }, 'c9': { 'canny_low': 45, 'canny_high': 130, 'min_token_area_line': 60, 'min_token_area_susp': 80, 'min_line_tokens': 2, 'z_edge': 1.8, 'z_grad': 1.8, 'z_res': 1.8, 'z_var': 1.8, 'z_stroke': 1.8, 'z_height': 2.0, 'ring_ratio_low': 0.85, 'ring_ratio_high': 1.25, 'fft_peak_min': 7.0, 'fft_ratio_min': 1.3, 'score_threshold': 1.8, 'min_region_area': 100, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'selective_loose_v2': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.9, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 6, 'min_keypoints': 12, 'min_area': 200, 'min_strength': 10, 'ocr_similarity': 0.45 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 2.4, 'stroke_z': 2.4, 'ocr_edge_density': 0.22, 'min_region_area': 130, 'min_line_components': 3, 'component_min_area': 110 }, 'c3': { 'component_min_area': 120, 'min_candidate_area': 180, 'stamp_circularity': 0.4, 'stamp_fill': 0.18, 'signature_aspect': 2.2, 'signature_fill_max': 0.38, 'fill_min': 0.28, 'ocr_min_area': 90, 'min_region_area': 90 }, 'c4': { 'gap_min_abs': 10.0, 'gap_median_mult': 1.35, 'gap_token_width_mult': 0.45, 'smooth_percentile': 40, 'smooth_min_area': 110, 'smooth_min_dim': 5, 'score_threshold': 1.6, 'min_region_area': 110, 'ring_var_ratio': 0.8, 'ring_grad_ratio': 0.78, 'ring_res_ratio': 0.85, 'ring_fg_delta': 0.03, 'erased_text_bonus': 0.7 }, 'c5': { 'row_density_thresh': 0.009, 'col_density_thresh': 0.005, 'gap_thresh_px': 8, 'gap_thresh_ratio': 0.04, 'band_min_height_px': 12, 'band_min_height_ratio': 0.04, 'band_min_width': 28, 'min_header_height_ratio': 0.055, 'cue_threshold': 0.18, 'cue_count_min': 2, 'score_threshold': 0.9, 'dist_balance_max': 0.28, 'dist_min': 0.4, 'min_region_area': 220 }, 'c6': { 'var_percentile': 45, 'grad_percentile': 45, 'res_percentile': 50, 'candidate_density_min': 0.001, 'canny_low': 25, 'canny_high': 90, 'hough_threshold': 45, 'hough_min_len_ratio': 0.06, 'hough_min_len_px': 28, 'hough_max_gap': 22, 'diag_angle_min': 15.0, 'diag_angle_max': 75.0, 'diag_ratio_min': 0.2, 'diag_count_min': 4, 'periodicity_min': 1.7, 'contour_area_min': 90, 'aspect_min': 1.5, 'angle_delta_max': 45.0, 'box_area_min': 120, 'fallback_box_area_min': 380 }, 'c7': { 'min_tokens_page': 2, 'min_tokens_per_line': 2, 'min_gaps_per_line': 2, 'med_gap_min': 2.5, 'mad_gap_min': 0.7, 'gap_cv_max': 0.95, 'min_token_width': 4, 'large_gap_min_abs': 8.0, 'large_gap_median_mult': 1.4, 'large_gap_z': 2.0, 'large_gap_line_ratio_max': 0.38, 'tight_gap_median_mult': 0.6, 'tight_gap_median_min': 4.5, 'tight_gap_z': -1.6, 'single_gap_median_mult': 2.4, 'single_gap_min_abs': 10.0, 'single_gap_min_tokens': 4, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.004, 'bg_var_ratio_max': 0.75, 'bg_res_ratio_max': 0.75, 'bg_grad_ratio_max': 0.85, 'stroke_cv_max': 0.34, 'height_cv_max': 0.25, 'spec_peak_min': 7.0, 'spec_highfreq_min': 1.6, 'spec_flatness_min': 0.42, 'bg_res_ratio_flatness_max': 0.88, 'coverage_min': 0.22, 'line_coverage_min': 0.35, 'coverage_high_min': 0.45, 'score_threshold': 1.9 }, 'c9': { 'canny_low': 50, 'canny_high': 140, 'min_token_area_line': 80, 'min_token_area_susp': 100, 'min_line_tokens': 3, 'z_edge': 2.3, 'z_grad': 2.3, 'z_res': 2.3, 'z_var': 2.3, 'z_stroke': 2.3, 'z_height': 2.5, 'ring_ratio_low': 0.75, 'ring_ratio_high': 1.35, 'fft_peak_min': 8.5, 'fft_ratio_min': 1.7, 'score_threshold': 2.3, 'min_region_area': 140, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } }, 'super_loose': { 'c1': { 'max_dim': 1200, 'orb_nfeatures': 4000, 'orb_scale_factor': 1.2, 'orb_nlevels': 8, 'match_ratio': 0.92, 'cluster_bin_size': 12.0, 'min_cluster_pairs': 5, 'min_keypoints': 10, 'min_area': 160, 'min_strength': 8, 'ocr_similarity': 0.4 }, 'c2': { 'canny_low': 50, 'canny_high': 150, 'edge_z': 1.4, 'stroke_z': 1.4, 'ocr_edge_density': 0.14, 'min_region_area': 60, 'min_line_components': 2, 'component_min_area': 60 }, 'c3': { 'component_min_area': 100, 'min_candidate_area': 150, 'stamp_circularity': 0.35, 'stamp_fill': 0.16, 'signature_aspect': 2.0, 'signature_fill_max': 0.42, 'fill_min': 0.25, 'ocr_min_area': 80, 'min_region_area': 80 }, 'c4': { 'gap_min_abs': 6.0, 'gap_median_mult': 1.0, 'gap_token_width_mult': 0.3, 'smooth_percentile': 60, 'smooth_min_area': 60, 'smooth_min_dim': 4, 'score_threshold': 0.9, 'min_region_area': 60, 'ring_var_ratio': 0.95, 'ring_grad_ratio': 0.92, 'ring_res_ratio': 0.95, 'ring_fg_delta': 0.01, 'erased_text_bonus': 0.85 }, 'c5': { 'row_density_thresh': 0.008, 'col_density_thresh': 0.004, 'gap_thresh_px': 7, 'gap_thresh_ratio': 0.035, 'band_min_height_px': 10, 'band_min_height_ratio': 0.035, 'band_min_width': 24, 'min_header_height_ratio': 0.05, 'cue_threshold': 0.15, 'cue_count_min': 2, 'score_threshold': 0.8, 'dist_balance_max': 0.32, 'dist_min': 0.35, 'min_region_area': 200 }, 'c6': { 'var_percentile': 50, 'grad_percentile': 50, 'res_percentile': 50, 'candidate_density_min': 0.0008, 'canny_low': 20, 'canny_high': 80, 'hough_threshold': 40, 'hough_min_len_ratio': 0.055, 'hough_min_len_px': 24, 'hough_max_gap': 24, 'diag_angle_min': 14.0, 'diag_angle_max': 76.0, 'diag_ratio_min': 0.18, 'diag_count_min': 3, 'periodicity_min': 1.5, 'contour_area_min': 70, 'aspect_min': 1.4, 'angle_delta_max': 50.0, 'box_area_min': 100, 'fallback_box_area_min': 320 }, 'c7': { 'min_tokens_page': 2, 'min_tokens_per_line': 2, 'min_gaps_per_line': 2, 'med_gap_min': 2.0, 'mad_gap_min': 0.6, 'gap_cv_max': 1.0, 'min_token_width': 3, 'large_gap_min_abs': 7.0, 'large_gap_median_mult': 1.3, 'large_gap_z': 1.8, 'large_gap_line_ratio_max': 0.4, 'tight_gap_median_mult': 0.65, 'tight_gap_median_min': 4.0, 'tight_gap_z': -1.4, 'single_gap_median_mult': 2.2, 'single_gap_min_abs': 9.0, 'single_gap_min_tokens': 3, 'pad_y_ratio': 0.25, 'pad_x_ratio': 0.1 }, 'c8': { 'text_density_min': 0.003, 'bg_var_ratio_max': 0.8, 'bg_res_ratio_max': 0.8, 'bg_grad_ratio_max': 0.9, 'stroke_cv_max': 0.36, 'height_cv_max': 0.27, 'spec_peak_min': 6.0, 'spec_highfreq_min': 1.4, 'spec_flatness_min': 0.4, 'bg_res_ratio_flatness_max': 0.9, 'coverage_min': 0.18, 'line_coverage_min': 0.3, 'coverage_high_min': 0.4, 'score_threshold': 1.7 }, 'c9': { 'canny_low': 40, 'canny_high': 120, 'min_token_area_line': 50, 'min_token_area_susp': 70, 'min_line_tokens': 2, 'z_edge': 1.6, 'z_grad': 1.6, 'z_res': 1.6, 'z_var': 1.6, 'z_stroke': 1.6, 'z_height': 1.8, 'ring_ratio_low': 0.9, 'ring_ratio_high': 1.2, 'fft_peak_min': 6.0, 'fft_ratio_min': 1.2, 'score_threshold': 1.6, 'min_region_area': 80, 'pad_x_ratio': 0.4, 'pad_y_ratio': 0.25, 'pad_x_min': 3, 'pad_y_min': 2 } } }
 
-ACTIVE_TUNING = "super_loose"
+NPV_FOCUS_FILTER = {
+    "min_area_ratio": 0.02,
+    "min_regions": 4,
+    "focus_categories": {"C2", "C3", "C4", "C7", "C8", "C9"},
+}
+
+
+def _build_npv_focus_tuning() -> Dict[str, Any]:
+    base = DETECTOR_TUNING.get("strict", DETECTOR_TUNING["normal"])
+    tuned = copy.deepcopy(base)
+    tuned["c2"].update({
+        "edge_z": 3.6,
+        "stroke_z": 3.6,
+        "ocr_edge_density": 0.35,
+        "min_region_area": 260,
+        "min_line_components": 5,
+        "component_min_area": 170,
+    })
+    tuned["c3"].update({
+        "component_min_area": 320,
+        "min_candidate_area": 520,
+        "stamp_circularity": 0.72,
+        "stamp_fill": 0.38,
+        "signature_aspect": 5.0,
+        "signature_fill_max": 0.18,
+        "fill_min": 0.55,
+        "ocr_min_area": 260,
+        "min_region_area": 260,
+    })
+    tuned["c4"].update({
+        "gap_min_abs": 18.0,
+        "gap_median_mult": 2.6,
+        "gap_token_width_mult": 0.9,
+        "smooth_percentile": 20,
+        "smooth_min_area": 320,
+        "smooth_min_dim": 10,
+        "score_threshold": 3.2,
+        "min_region_area": 240,
+        "ring_var_ratio": 0.55,
+        "ring_grad_ratio": 0.55,
+        "ring_res_ratio": 0.6,
+        "ring_fg_delta": 0.12,
+        "erased_text_bonus": 0.3,
+    })
+    tuned["c7"].update({
+        "min_tokens_page": 6,
+        "min_tokens_per_line": 6,
+        "min_gaps_per_line": 4,
+        "med_gap_min": 6.0,
+        "mad_gap_min": 1.4,
+        "gap_cv_max": 0.6,
+        "min_token_width": 8,
+        "large_gap_min_abs": 18.0,
+        "large_gap_median_mult": 2.8,
+        "large_gap_z": 4.2,
+        "large_gap_line_ratio_max": 0.22,
+        "tight_gap_median_mult": 0.34,
+        "tight_gap_median_min": 12.0,
+        "tight_gap_z": -3.6,
+        "single_gap_median_mult": 4.6,
+        "single_gap_min_abs": 28.0,
+        "single_gap_min_tokens": 7,
+    })
+    tuned["c8"].update({
+        "score_threshold": 4.0,
+        "coverage_min": 0.5,
+        "line_coverage_min": 0.6,
+        "coverage_high_min": 0.75,
+        "spec_peak_min": 15.0,
+        "spec_highfreq_min": 3.0,
+        "text_density_min": 0.012,
+    })
+    tuned["c9"].update({
+        "z_edge": 3.0,
+        "z_grad": 3.0,
+        "z_res": 3.0,
+        "z_var": 3.0,
+        "z_stroke": 3.0,
+        "z_height": 3.2,
+        "score_threshold": 3.2,
+        "min_region_area": 200,
+        "min_line_tokens": 3,
+    })
+    return tuned
+
+
+DETECTOR_TUNING["npv_focus"] = _build_npv_focus_tuning()
+
+ACTIVE_TUNING = "npv_focus"
 
 
 def set_tuning_preset(name: str) -> None:
@@ -2517,7 +2811,9 @@ def run_pipeline(
         raise FileNotFoundError(f"Input path not found: {input_path}")
 
     render_dir = debug_dir / "rendered_pages"
+    preview_dir = debug_dir / "preview"
     pages = build_document_pages(input_dir, render_dir)
+    preview_dir.mkdir(parents=True, exist_ok=True)
 
     results: List[PageAnalysisResult] = []
     for page in pages:
@@ -2558,6 +2854,16 @@ def run_pipeline(
         except Exception:
             regions = fallback_regions(page, predicted_categories)
 
+        if ACTIVE_TUNING == "npv_focus":
+            try:
+                predicted_categories, regions = apply_npv_focus_filter(
+                    page,
+                    predicted_categories,
+                    regions,
+                )
+            except Exception:
+                pass
+
         try:
             validation = validate_prediction(page, predicted_categories, regions)
             if validation is None:
@@ -2579,6 +2885,13 @@ def run_pipeline(
             result = fallback_build_result(page, predicted_categories, regions, quality_summary, validation)
 
         results.append(result)
+
+        try:
+            preview_path = render_preview_image(page, result, preview_dir)
+            if preview_path:
+                page.preview_path = preview_path
+        except Exception:
+            pass
 
     export_info = export_all_outputs(results, output_dir, annotations_dir)
 

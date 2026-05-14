@@ -3,13 +3,13 @@
 This FastAPI service runs the PS3 CV pipeline and exposes job-based APIs.
 
 ## Environment variables
-- `FIREBASE_CREDENTIALS`: JSON string for Firebase service account.
-- `FIREBASE_STORAGE_BUCKET`: Firebase storage bucket name.
 - `CORS_ORIGINS`: Comma-separated list of allowed origins (GitHub Pages URL).
-- `AUTH_REQUIRED`: `true` or `false`.
-- `PIPELINE_PRESET`: `super_loose` by default.
+- `PIPELINE_PRESET`: `npv_focus` by default.
 - `PIPELINE_VERSION`: label shown in UI.
-- `MAX_UPLOAD_BYTES`: default 10MB.
+- `MAX_UPLOAD_BYTES`: default 25MB.
+- `FINDINGS_MAX_PER_PAGE`: max findings per page (default 5).
+- `FINDINGS_MIN_AREA_RATIO`: minimum box area ratio per page (default 0.003).
+- `JOB_TTL_SECONDS`: in-memory job retention seconds (default 3600).
 - `JOB_EXECUTOR_WORKERS`: number of worker threads.
 
 ## Run locally

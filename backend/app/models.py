@@ -35,6 +35,7 @@ class PageResultModel(BaseModel):
     page_number: int
     file_name: str
     image_url: Optional[str] = None
+    preview_url: Optional[str] = None
     image_width: Optional[int] = None
     image_height: Optional[int] = None
     categories: List[str]
