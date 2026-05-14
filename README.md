@@ -1,11 +1,4 @@
-# 🔍 NHA PS3 - Document Forgery & Deepfake Detection
-**Nikhileswara Rao Sulake<sup>1</sup>, Sai Manikanta Eswar Machara<sup>1</sup>, Sivalal Kethavath<sup>1</sup>**
-
-<sup>1</sup> Rajiv Gandhi University of Knowledge Technologies, Nuzvid, Andhra Pradesh
-
----
-### Internal Validation Score: **0.5315** &nbsp;·&nbsp; Leaderboard Position: **Top 3**
-
+# Forgensic: Documment Forgery Detection Solution
 ---
 
 This pipeline is a **completely classical computer vision–based solution**, where no models or other heavy components are required. Just using traditional, pre-defined libraries, our solution is capable enough to detect document forgery across all 9 tampering categories.
