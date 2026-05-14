@@ -69,7 +69,7 @@
         <div class="api-hero">
           <div>
             <h1 class="api-heading">Developer API Guide</h1>
-            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required, open access for hackathon evaluation.</p>
+            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required — open access for hackathon evaluation.</p>
             <div class="api-badges">
               <span class="api-badge-chip">
                 <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="Python"/>
@@ -88,11 +88,12 @@
           <div class="api-facts">
             <h3>Quick Facts</h3>
             <ul>
-              <li>Base URL: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">http://127.0.0.1:8000</code></li>
+              <li>Base URL (prod): <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">https://forgery.tanuh.ai/api</code></li>
+              <li>Base URL (local): <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">http://127.0.0.1:8000</code></li>
               <li>Authentication: None (open access)</li>
               <li>Accepted: PDF, JPG, PNG, TIFF, BMP, WEBP</li>
               <li>Max file size: <strong>25 MB</strong></li>
-              <li>Previews served once, then evicted from memory</li>
+              <li>Preview bytes cached in memory; re-fetch allowed until server restart</li>
             </ul>
           </div>
         </div>
@@ -128,7 +129,7 @@
             <tr>
               <td><span class="api-method get">GET</span></td>
               <td><code>/jobs/{job_id}/files/{file_name}</code></td>
-              <td>One-time rendered page preview image</td>
+              <td>Rendered page preview image (cached in memory, deleted later)</td>
             </tr>
             <tr>
               <td><span class="api-method get">GET</span></td>
@@ -137,17 +138,17 @@
             </tr>
           </tbody>
         </table>
-        <div class="api-note">Interactive docs available at <strong>BASE_URL/docs</strong> · OpenAPI JSON at <strong>BASE_URL/openapi.json</strong></div>
+        <div class="api-note">Interactive docs: <strong>https://forgery.tanuh.ai/api/docs</strong> · OpenAPI JSON: <strong>https://forgery.tanuh.ai/api/openapi.json</strong></div>
       </div>
 
       <!-- Code examples grid -->
       <div class="api-grid" style="grid-template-columns:1fr 1fr;gap:16px;display:grid">
 
         <div class="api-panel">
-          <h3>1. Upload a document</h3>
+          <h3>1 — Upload a document</h3>
           <p>Send as <code>multipart/form-data</code>. Returns a <code>job_id</code> to poll.</p>
           <div class="api-code-wrap">
-            <pre class="api-code">curl -X POST "http://127.0.0.1:8000/jobs" \
+            <pre class="api-code">curl -X POST "https://forgery.tanuh.ai/api/jobs" \
   -F "file=@/path/to/document.pdf" \
   -F "ocr_enabled=true"</pre>
             <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
@@ -155,10 +156,10 @@
         </div>
 
         <div class="api-panel">
-          <h3>2. Poll job status</h3>
+          <h3>2 — Poll job status</h3>
           <p>Poll until <code>status</code> is <code>"complete"</code> or <code>"error"</code>.</p>
           <div class="api-code-wrap">
-            <pre class="api-code">curl "http://127.0.0.1:8000/jobs/JOB_ID"
+            <pre class="api-code">curl "https://forgery.tanuh.ai/api/jobs/JOB_ID"
 
 # Response:
 {
@@ -171,24 +172,58 @@
         </div>
 
         <div class="api-panel">
-          <h3>3. Fetch results</h3>
+          <h3>3 — Fetch results</h3>
           <p>Returns full forgery findings with per-page categories, regions, and summary text.</p>
           <div class="api-code-wrap">
-            <pre class="api-code">curl "http://127.0.0.1:8000/jobs/JOB_ID/results"</pre>
+            <pre class="api-code">curl "https://forgery.tanuh.ai/api/jobs/JOB_ID/results"</pre>
             <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
           </div>
         </div>
 
         <div class="api-panel">
-          <h3>4. One-time preview</h3>
-          <p>Fetch rendered page image with bounding boxes. Returns <code>404</code> on second request by design.</p>
+          <h3>4 — Preview image</h3>
+          <p>Fetch rendered page image with bounding boxes. Preview bytes are cached in memory.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl -L \
-  "http://127.0.0.1:8000/jobs/JOB_ID/files/page_001.png" \
+  "https://forgery.tanuh.ai/api/jobs/JOB_ID/files/page_001.png" \
   -o preview.png</pre>
             <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
           </div>
-          <div class="api-note">Preview bytes cached in memory only, evicted after first fetch.</div>
+          <div class="api-note">Preview bytes are cleared when the server restarts.</div>
+        </div>
+
+        <div class="api-panel" style="grid-column: 1 / -1;">
+          <h3>Python (requests) — End-to-end flow</h3>
+          <p>Upload a file, poll for completion, then fetch results.</p>
+          <div class="api-code-wrap">
+            <pre class="api-code"># pip install requests
+import time
+import requests
+
+BASE_URL = "https://forgery.tanuh.ai/api"
+FILE_PATH = "/path/to/document.pdf"
+
+with open(FILE_PATH, "rb") as handle:
+    response = requests.post(
+        f"{BASE_URL}/jobs",
+        files={"file": handle},
+        data={"ocr_enabled": "true"},
+        timeout=60,
+    )
+
+response.raise_for_status()
+job_id = response.json()["job_id"]
+
+for _ in range(6):
+    status = requests.get(f"{BASE_URL}/jobs/{job_id}", timeout=30).json()
+    if status.get("status") in ("complete", "error"):
+        break
+    time.sleep(2)
+
+results = requests.get(f"{BASE_URL}/jobs/{job_id}/results", timeout=30)
+print(results.json())</pre>
+            <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
+          </div>
         </div>
 
       </div>
@@ -238,7 +273,7 @@
       <!-- Privacy note -->
       <div class="api-section-card">
         <h2 style="font-size:16px;font-weight:700;margin-bottom:10px;color:var(--ink)">Privacy &amp; Data Handling</h2>
-        <p style="font-size:13.5px;color:#334155;line-height:1.6">Uploaded files are deleted immediately after processing completes. Rendered preview images are cached in-memory and served exactly once, a second request returns <code>404</code>. No document data is written to disk or stored in any database.</p>
+        <p style="font-size:13.5px;color:#334155;line-height:1.6">Uploaded files are deleted immediately after processing completes. Rendered preview images are cached in-memory and cleared on server restart. No document data is written to disk or stored in any database.</p>
       </div>
 
     </div>
