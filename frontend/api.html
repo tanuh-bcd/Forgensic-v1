@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Forgensic — API Access</title>
+  <title>Forgensic | API Access</title>
   <meta name="description" content="Developer API guide for the Forgensic document forgery detection system."/>
   <link rel="icon" href="logos/tanuh_logo.png" type="image/png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -69,7 +69,7 @@
         <div class="api-hero">
           <div>
             <h1 class="api-heading">Developer API Guide</h1>
-            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required — open access for hackathon evaluation.</p>
+            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required, open access for hackathon evaluation.</p>
             <div class="api-badges">
               <span class="api-badge-chip">
                 <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="Python"/>
@@ -144,7 +144,7 @@
       <div class="api-grid" style="grid-template-columns:1fr 1fr;gap:16px;display:grid">
 
         <div class="api-panel">
-          <h3>1 — Upload a document</h3>
+          <h3>1. Upload a document</h3>
           <p>Send as <code>multipart/form-data</code>. Returns a <code>job_id</code> to poll.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl -X POST "http://127.0.0.1:8000/jobs" \
@@ -155,7 +155,7 @@
         </div>
 
         <div class="api-panel">
-          <h3>2 — Poll job status</h3>
+          <h3>2. Poll job status</h3>
           <p>Poll until <code>status</code> is <code>"complete"</code> or <code>"error"</code>.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl "http://127.0.0.1:8000/jobs/JOB_ID"
@@ -171,7 +171,7 @@
         </div>
 
         <div class="api-panel">
-          <h3>3 — Fetch results</h3>
+          <h3>3. Fetch results</h3>
           <p>Returns full forgery findings with per-page categories, regions, and summary text.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl "http://127.0.0.1:8000/jobs/JOB_ID/results"</pre>
@@ -180,7 +180,7 @@
         </div>
 
         <div class="api-panel">
-          <h3>4 — One-time preview</h3>
+          <h3>4. One-time preview</h3>
           <p>Fetch rendered page image with bounding boxes. Returns <code>404</code> on second request by design.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl -L \
@@ -188,7 +188,7 @@
   -o preview.png</pre>
             <button class="btn-copy-code" onclick="copyCode(this)">Copy</button>
           </div>
-          <div class="api-note">Preview bytes cached in memory only — evicted after first fetch.</div>
+          <div class="api-note">Preview bytes cached in memory only, evicted after first fetch.</div>
         </div>
 
       </div>
@@ -238,7 +238,7 @@
       <!-- Privacy note -->
       <div class="api-section-card">
         <h2 style="font-size:16px;font-weight:700;margin-bottom:10px;color:var(--ink)">Privacy &amp; Data Handling</h2>
-        <p style="font-size:13.5px;color:#334155;line-height:1.6">Uploaded files are deleted immediately after processing completes. Rendered preview images are cached in-memory and served exactly once — a second request returns <code>404</code>. No document data is written to disk or stored in any database.</p>
+        <p style="font-size:13.5px;color:#334155;line-height:1.6">Uploaded files are deleted immediately after processing completes. Rendered preview images are cached in-memory and served exactly once, a second request returns <code>404</code>. No document data is written to disk or stored in any database.</p>
       </div>
 
     </div>
