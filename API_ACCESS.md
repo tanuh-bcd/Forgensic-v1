@@ -86,11 +86,29 @@ A second request to the same preview URL returns 404 by design.
   "status": "complete",
   "file_name": "report.pdf",
   "category_summary": {"C1": 2, "C3": 1},
+  "findings_summary": {
+    "summary_text": "Page 1: Added content near \"Hospital Seal\" appears altered.",
+    "findings": [
+      {
+        "page": 1,
+        "category_id": "C3",
+        "category_label": "Added content",
+        "snippet": "Hospital Seal",
+        "location": "top-right",
+        "summary": "Page 1: Added content near \"Hospital Seal\" appears altered."
+      }
+    ]
+  },
   "pages": [
     {"page_number": 1, "image_url": "/jobs/abc123/files/page_001.png"}
   ]
 }
 ```
+
+### Findings summary notes
+
+- `findings_summary.summary_text` is a human-readable, page-by-page synopsis.
+- If OCR is disabled or unavailable, `findings_summary` may be null or have an empty `summary_text`.
 
 ## Privacy guarantees
 

@@ -313,7 +313,7 @@ TOKEN="YOUR_FIREBASE_ID_TOKEN"</code></pre>
 
             <article class="api-panel">
               <h3>5) Fetch results</h3>
-              <p>Results are summary-only, with per-page categories and regions. No images are stored.</p>
+              <p>Results are summary-only, with per-page categories and regions. A findings summary text is included when OCR is available.</p>
               <pre class="api-code"><code>curl -X GET "$BASE_URL/jobs/JOB_ID/results" \
   -H "Authorization: Bearer $TOKEN"</code></pre>
             </article>
@@ -346,10 +346,24 @@ TOKEN="YOUR_FIREBASE_ID_TOKEN"</code></pre>
   "status": "complete",
   "file_name": "report.pdf",
   "category_summary": {"C1": 2, "C3": 1},
+  "findings_summary": {
+    "summary_text": "Page 1: Added content near \"Hospital Seal\" appears altered.",
+    "findings": [
+      {
+        "page": 1,
+        "category_id": "C3",
+        "category_label": "Added content",
+        "snippet": "Hospital Seal",
+        "location": "top-right",
+        "summary": "Page 1: Added content near \"Hospital Seal\" appears altered."
+      }
+    ]
+  },
   "pages": [
     {"page_number": 1, "image_url": "/jobs/abc123/files/page_001.png"}
   ]
 }</code></pre>
+                  <div class="api-note" style="margin-top:10px;">If OCR is disabled or unavailable, findings_summary may be null or empty.</div>
                 </div>
               </div>
             </article>
