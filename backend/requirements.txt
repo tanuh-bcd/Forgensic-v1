@@ -10,4 +10,3 @@ pytesseract
 pyyaml
 pandas
 openpyxl
-firebase-admin
