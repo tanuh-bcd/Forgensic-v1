@@ -33,7 +33,7 @@
         <img class="logo-tanuh" src="logos/tanuh_logo.png" alt="TANUH"/>
         <img class="logo-moe" src="logos/MoE_Logo.svg" alt="Ministry of Education"/>
         <img class="logo-iisc" src="logos/IISc_Logo.png" alt="IISc"/>
-        <img class="logo-nha" src="logos/NHA_logo.png" alt="National Health Authority"/>
+        <!-- <img class="logo-nha" src="logos/NHA_logo.png" alt="National Health Authority"/> -->
       </div>
     </div>
   </div>
@@ -55,9 +55,7 @@
       </a>
     </div>
   </div>
-  <div class="ai-badge-row">
-    <span class="ai-badge"><span class="ai-dot-off"></span>AI OFF</span>
-  </div>
+ 
 </header>
 
 <main class="main-content">
@@ -69,7 +67,7 @@
         <div class="api-hero">
           <div>
             <h1 class="api-heading">Developer API Guide</h1>
-            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required — open access for hackathon evaluation.</p>
+            <p class="api-sub">Submit documents, poll status, and retrieve forensic analysis results. Built with Python + FastAPI + OpenCV. No authentication required, open access for hackathon evaluation.</p>
             <div class="api-badges">
               <span class="api-badge-chip">
                 <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="Python"/>
@@ -145,7 +143,7 @@
       <div class="api-grid" style="grid-template-columns:1fr 1fr;gap:16px;display:grid">
 
         <div class="api-panel">
-          <h3>1 — Upload a document</h3>
+          <h3>1. Upload a document</h3>
           <p>Send as <code>multipart/form-data</code>. Returns a <code>job_id</code> to poll.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl -X POST "https://forgery.tanuh.ai/api/jobs" \
@@ -156,7 +154,7 @@
         </div>
 
         <div class="api-panel">
-          <h3>2 — Poll job status</h3>
+          <h3>2. Poll job status</h3>
           <p>Poll until <code>status</code> is <code>"complete"</code> or <code>"error"</code>.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl "https://forgery.tanuh.ai/api/jobs/JOB_ID"
@@ -172,7 +170,7 @@
         </div>
 
         <div class="api-panel">
-          <h3>3 — Fetch results</h3>
+          <h3>3. Fetch results</h3>
           <p>Returns full forgery findings with per-page categories, regions, and summary text.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl "https://forgery.tanuh.ai/api/jobs/JOB_ID/results"</pre>
@@ -181,7 +179,7 @@
         </div>
 
         <div class="api-panel">
-          <h3>4 — Preview image</h3>
+          <h3>4. Preview image</h3>
           <p>Fetch rendered page image with bounding boxes. Preview bytes are cached in memory.</p>
           <div class="api-code-wrap">
             <pre class="api-code">curl -L \
@@ -193,7 +191,7 @@
         </div>
 
         <div class="api-panel" style="grid-column: 1 / -1;">
-          <h3>Python (requests) — End-to-end flow</h3>
+          <h3>Python (requests) : End-to-end flow</h3>
           <p>Upload a file, poll for completion, then fetch results.</p>
           <div class="api-code-wrap">
             <pre class="api-code"># pip install requests

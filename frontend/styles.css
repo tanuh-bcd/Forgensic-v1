@@ -228,6 +228,18 @@ img{max-width:100%;display:block}
 
 .hidden{display:none!important}
 
+.team-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.team-link:hover .team-card {
+  transform: translateY(-4px);
+  transition: 0.3s ease;
+  cursor: pointer;
+}
+
 /* ── RESPONSIVE ── */
 @media(max-width:960px){
   .topbar-inner{flex-wrap:wrap;gap:8px;padding:10px 16px}
