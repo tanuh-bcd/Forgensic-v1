@@ -33,9 +33,11 @@ const findingsList = $("findings-list");
 const findingsMeta = $("findings-meta");
 const copyFindingsBtn = $("copy-findings-btn");
 const downloadFindingsBtn = $("download-findings-btn");
+const toggleFindingsBtn = $("toggle-findings-btn");
 const tamperedFlag = $("tampered-flag");
 const tamperedValue = $("tampered-value");
 const togglePreviewBtn = $("toggle-preview-btn");
+const showAllOverlaysBtn = $("show-all-overlays-btn");
 const previewCard = $("preview-card");
 const previewViewer = $("preview-viewer");
 const previewImage = $("preview-image");
@@ -47,6 +49,7 @@ const cropModal = $("crop-modal");
 const cropImage = $("crop-image");
 const cropMeta = $("crop-meta");
 const cropCloseBtn = $("crop-close");
+const showInDocumentBtn = $("show-in-document-btn");
 
 const LAST_JOB_KEY = "forgensic_last_job";
 
@@ -59,6 +62,12 @@ let pendingPreviewPage = null;
 let previewLoaded = false;
 let findingsTextCache = "";
 let findingsFileNameCache = "";
+let focusedFinding = null;
+let selectedFinding = null;
+let findingsAll = [];
+let findingsShowAll = false;
+
+const DEFAULT_FINDINGS_LIMIT = 5;
 
 function showToast(message, variant = "info") {
   if (!toast) return;
@@ -194,7 +203,7 @@ function setPreviewVisible(visible) {
       previewEmpty.textContent = "Loading preview...";
       previewEmpty.style.display = "block";
     }
-    const previewUrl = pendingPreviewPage.preview_url || pendingPreviewPage.image_url;
+    const previewUrl = getPreviewImageUrl(pendingPreviewPage);
     if (previewUrl) {
       loadPreviewImage(previewUrl);
     }
@@ -206,6 +215,10 @@ function setPreviewVisible(visible) {
 function resetPreviewState(message) {
   pendingPreviewPage = null;
   previewLoaded = false;
+  focusedFinding = null;
+  selectedFinding = null;
+  updateModalButtons();
+  updateFocusButtons();
   if (previewImage) {
     previewImage.removeAttribute("src");
     previewImage.style.display = "none";
@@ -216,6 +229,46 @@ function resetPreviewState(message) {
     previewEmpty.style.display = "block";
   }
   setPreviewVisible(false);
+}
+
+function updateFocusButtons() {
+  if (showAllOverlaysBtn) showAllOverlaysBtn.disabled = !focusedFinding;
+}
+
+function updateModalButtons() {
+  if (showInDocumentBtn) showInDocumentBtn.disabled = !selectedFinding;
+}
+
+function getPreviewImageUrl(pageData) {
+  if (!pageData) return null;
+  return pageData.image_url || pageData.preview_url || null;
+}
+
+function getPageDataByNumber(pageNumber) {
+  return (resultsPayload?.pages || []).find((page) => page.page_number === pageNumber);
+}
+
+function setFocusedFinding(finding) {
+  focusedFinding = finding;
+  updateFocusButtons();
+  if (!resultsPayload) return;
+  const pageData = getPageDataByNumber(finding.page);
+  if (!pageData) {
+    showToast("Preview not available for this finding", "error");
+    return;
+  }
+  pendingPreviewPage = pageData;
+  previewLoaded = false;
+  setPreviewVisible(true);
+  renderPreviewOverlay(pageData);
+}
+
+function clearFocusedFinding() {
+  focusedFinding = null;
+  updateFocusButtons();
+  if (pendingPreviewPage) {
+    renderPreviewOverlay(pendingPreviewPage);
+  }
 }
 
 function buildCategorySummary(pages) {
@@ -248,7 +301,7 @@ function updateTamperedFlag(summary) {
 function buildFindingsText(payload) {
   const fileName = payload?.file_name || "document";
   const timestamp = new Date().toISOString();
-  const findings = payload?.findings_summary?.findings || [];
+  const findings = payload?.findings_summary?.findings_all || payload?.findings_summary?.findings || [];
   const summaryText = payload?.findings_summary?.summary_text || "No findings yet.";
   const lines = [
     `File: ${fileName}`,
@@ -277,13 +330,23 @@ function setFindingsMeta(payload) {
 
 function renderFindings(payload) {
   if (!findingsList) return;
-  const findings = payload?.findings_summary?.findings || [];
   const summaryText = payload?.findings_summary?.summary_text || "No findings yet.";
+  findingsAll = payload?.findings_summary?.findings_all || payload?.findings_summary?.findings || [];
+  findingsShowAll = false;
   findingsList.innerHTML = "";
-  if (!findings.length) {
+  if (!findingsAll.length) {
     findingsList.textContent = summaryText;
+    updateFindingsToggle();
     return;
   }
+  const initial = findingsAll.slice(0, DEFAULT_FINDINGS_LIMIT);
+  renderFindingsList(initial);
+  updateFindingsToggle();
+}
+
+function renderFindingsList(findings) {
+  if (!findingsList) return;
+  findingsList.innerHTML = "";
   findings.forEach((item) => {
     const row = document.createElement("div");
     row.className = "finding-item";
@@ -296,6 +359,7 @@ function renderFindings(payload) {
       link.className = "finding-link";
       link.textContent = "View area";
       link.dataset.page = String(item.page || "");
+      link.dataset.category = String(item.category_id || "");
       link.dataset.x = String(item.box.x ?? "");
       link.dataset.y = String(item.box.y ?? "");
       link.dataset.w = String(item.box.w ?? "");
@@ -304,6 +368,13 @@ function renderFindings(payload) {
     }
     findingsList.appendChild(row);
   });
+}
+
+function updateFindingsToggle() {
+  if (!toggleFindingsBtn) return;
+  const hasMore = findingsAll.length > DEFAULT_FINDINGS_LIMIT;
+  toggleFindingsBtn.style.display = hasMore ? "inline-flex" : "none";
+  toggleFindingsBtn.textContent = findingsShowAll ? "Show top 5" : "View all";
 }
 
 function updateFindingsExport(payload) {
@@ -347,6 +418,8 @@ function closeCropModal() {
   if (!cropModal || !cropImage) return;
   cropImage.removeAttribute("src");
   cropModal.classList.add("hidden");
+  selectedFinding = null;
+  updateModalButtons();
 }
 
 function selectFile(file) {
@@ -379,14 +452,18 @@ function renderPreviewOverlay(pageData) {
     if (!imgWidth || !imgHeight) return;
     positionOverlayToImage(previewImage, previewOverlay);
     previewOverlay.innerHTML = "";
-    (pageData.regions || []).forEach((region) => {
+    const focus =
+      focusedFinding && focusedFinding.page === pageData.page_number
+        ? focusedFinding
+        : null;
+    const renderBox = (boxData, categoryId, focusMode) => {
+      const left = (boxData.x / imgWidth) * 100;
+      const top = (boxData.y / imgHeight) * 100;
+      const width = (boxData.w / imgWidth) * 100;
+      const height = (boxData.h / imgHeight) * 100;
+      const color = CATEGORY_COLORS[categoryId] || "#f97316";
       const box = document.createElement("div");
-      const left = (region.x / imgWidth) * 100;
-      const top = (region.y / imgHeight) * 100;
-      const width = (region.w / imgWidth) * 100;
-      const height = (region.h / imgHeight) * 100;
-      const color = CATEGORY_COLORS[region.category_id] || "#f97316";
-      box.className = "box";
+      box.className = focusMode ? "box focus" : "box";
       box.style.left = `${left}%`;
       box.style.top = `${top}%`;
       box.style.width = `${width}%`;
@@ -394,6 +471,15 @@ function renderPreviewOverlay(pageData) {
       box.style.borderColor = color;
       box.style.backgroundColor = `${color}22`;
       previewOverlay.appendChild(box);
+    };
+
+    if (focus) {
+      renderBox(focus.box, focus.categoryId || focus.category_id, true);
+      return;
+    }
+
+    (pageData.regions || []).forEach((region) => {
+      renderBox(region, region.category_id, false);
     });
   };
   previewImage.onload = () => requestAnimationFrame(renderBoxes);
@@ -478,6 +564,10 @@ async function loadResults(jobId) {
   resultCache.set(jobId, resultsPayload);
 
   localStorage.setItem(LAST_JOB_KEY, jobId);
+  focusedFinding = null;
+  selectedFinding = null;
+  updateModalButtons();
+  updateFocusButtons();
   setFindingsMeta(resultsPayload);
   renderFindings(resultsPayload);
   updateFindingsExport(resultsPayload);
@@ -622,13 +712,37 @@ function initCommon() {
     const y = parseInt(target.dataset.y || "0", 10);
     const w = parseInt(target.dataset.w || "0", 10);
     const h = parseInt(target.dataset.h || "0", 10);
+    const categoryId = target.dataset.category || "";
     if (!page || !w || !h) return;
+    selectedFinding = { page, categoryId, box: { x, y, w, h } };
+    updateModalButtons();
     openCropModal(page, { x, y, w, h });
   });
 
   cropCloseBtn?.addEventListener("click", closeCropModal);
   cropModal?.addEventListener("click", (event) => {
     if (event.target === cropModal) closeCropModal();
+  });
+
+  showAllOverlaysBtn?.addEventListener("click", () => {
+    if (!focusedFinding) return;
+    clearFocusedFinding();
+    showToast("Showing all overlays", "info");
+  });
+
+  toggleFindingsBtn?.addEventListener("click", () => {
+    if (!findingsAll.length) return;
+    findingsShowAll = !findingsShowAll;
+    const list = findingsShowAll ? findingsAll : findingsAll.slice(0, DEFAULT_FINDINGS_LIMIT);
+    renderFindingsList(list);
+    updateFindingsToggle();
+  });
+
+  showInDocumentBtn?.addEventListener("click", () => {
+    if (!selectedFinding) return;
+    setFocusedFinding(selectedFinding);
+    closeCropModal();
+    showToast("Showing selected area in document", "info");
   });
 }
 

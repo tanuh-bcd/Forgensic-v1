@@ -354,6 +354,8 @@ def build_findings_summary(
                                 "category_label": category_label,
                                 "location": location,
                                 "snippet": snippet or None,
+                                "has_text": bool(snippet or context),
+                                "text_score": _snippet_score(snippet) if snippet else 0,
                                 "from_ocr": bool(context),
                                 "box": {
                                     "x": int(box[0]),
@@ -369,20 +371,25 @@ def build_findings_summary(
         except Exception:
             continue
 
-    findings: List[Dict[str, Any]] = []
+    findings_all: List[Dict[str, Any]] = []
     for page_number in sorted(page_candidates.keys()):
         candidates = page_candidates[page_number]
-        filtered = [item for item in candidates if item["area_ratio"] >= min_area_ratio]
-        filtered.sort(key=lambda item: item["area"], reverse=True)
-        selected = filtered[:max_per_page] if max_per_page > 0 else filtered
-        for item in selected:
+        filtered = [
+            item for item in candidates
+            if item["has_text"] or item["area_ratio"] >= min_area_ratio
+        ]
+        filtered.sort(
+            key=lambda item: (item["has_text"], item["text_score"], item["area"]),
+            reverse=True,
+        )
+        for item in filtered:
             snippet = item.get("snippet")
             category_label = item.get("category_label")
             if snippet:
                 summary = f"Page {item['page']}: {category_label} near \"{snippet}\" appears altered."
             else:
                 summary = f"Page {item['page']}: {category_label} in {item['location']} appears altered."
-            findings.append(
+            findings_all.append(
                 {
                     "page": item["page"],
                     "category_id": item["category_id"],
@@ -394,6 +401,7 @@ def build_findings_summary(
                 }
             )
 
+    findings = findings_all[:max_per_page] if max_per_page > 0 else findings_all
     summary_text = "\n".join(item["summary"] for item in findings)
     if not summary_text.strip():
         summary_text = "No forgery detected."
@@ -416,6 +424,7 @@ def build_findings_summary(
     return {
         "summary_text": summary_text,
         "findings": findings,
+        "findings_all": findings_all,
         "sanity": sanity,
         "merge_stats": merge_stats,
     }
