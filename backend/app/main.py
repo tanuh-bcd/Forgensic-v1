@@ -1,3 +1,4 @@
+import json
 import mimetypes
 import shutil
 import uuid
@@ -6,8 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
+from threading import Lock
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -39,10 +41,53 @@ if CORS_ORIGINS:
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+ANALYTICS_FILE = DATA_DIR / "analytics.json"
+_ANALYTICS_LOCK = Lock()
+_ANALYTICS_STATE: Dict[str, Any] = {}
+
 _executor = ThreadPoolExecutor(max_workers=JOB_EXECUTOR_WORKERS)
 _JOB_STATE: Dict[str, Dict[str, Any]] = {}
 _JOB_RESULTS: Dict[str, Dict[str, Any]] = {}
 _JOB_FILE_BYTES: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+
+def _default_analytics_state() -> Dict[str, Any]:
+    return {
+        "total_docs": 0,
+        "total_pages": 0,
+        "total_inference_seconds": 0.0,
+        "processed_jobs": [],
+        "daily": {},
+        "last_updated": None,
+    }
+
+
+def _load_analytics_state() -> Dict[str, Any]:
+    state = _default_analytics_state()
+    if ANALYTICS_FILE.exists():
+        try:
+            data = json.loads(ANALYTICS_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                state.update(data)
+        except Exception:
+            return state
+    state.setdefault("total_docs", 0)
+    state.setdefault("total_pages", 0)
+    state.setdefault("total_inference_seconds", 0.0)
+    state.setdefault("processed_jobs", [])
+    state.setdefault("daily", {})
+    state.setdefault("last_updated", None)
+    return state
+
+
+def _save_analytics_state(state: Dict[str, Any]) -> None:
+    try:
+        ANALYTICS_FILE.write_text(json.dumps(state), encoding="utf-8")
+    except Exception:
+        return
+
+
+_ANALYTICS_STATE = _load_analytics_state()
 
 
 def _now_iso() -> str:
@@ -53,7 +98,8 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        sanitized = value.replace("Z", "+00:00")
+        return datetime.fromisoformat(sanitized)
     except ValueError:
         return None
 
@@ -70,6 +116,115 @@ def _cleanup_jobs() -> None:
             _JOB_RESULTS.pop(job_id, None)
             _JOB_FILE_BYTES.pop(job_id, None)
             shutil.rmtree(DATA_DIR / job_id, ignore_errors=True)
+
+
+def _normalize_granularity(value: Optional[str]) -> str:
+    value = (value or "day").lower()
+    if value not in {"day", "month", "year"}:
+        return "day"
+    return value
+
+
+def _to_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _default_range(granularity: str) -> Dict[str, datetime]:
+    now = datetime.now(timezone.utc)
+    end = now.replace(hour=23, minute=59, second=59, microsecond=999000)
+    if granularity == "month":
+        start = end.replace(day=1)
+        month = start.month - 11
+        year = start.year
+        while month <= 0:
+            month += 12
+            year -= 1
+        start = start.replace(year=year, month=month)
+    elif granularity == "year":
+        start = end.replace(month=1, day=1, year=end.year - 4)
+    else:
+        start = (end - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    return {"start": start, "end": end}
+
+
+def _bucket_key(dt: datetime, granularity: str) -> str:
+    if granularity == "month":
+        return f"{dt.year}-{dt.month:02d}"
+    if granularity == "year":
+        return f"{dt.year}"
+    return dt.date().isoformat()
+
+
+def _build_series(granularity: str, start: datetime, end: datetime, daily: Dict[str, Any]) -> Dict[str, Any]:
+    buckets = []
+    cursor = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    if granularity == "month":
+        cursor = cursor.replace(day=1)
+    if granularity == "year":
+        cursor = cursor.replace(month=1, day=1)
+
+    while cursor <= end:
+        buckets.append({
+            "key": _bucket_key(cursor, granularity),
+            "date": cursor.date().isoformat(),
+            "docs": 0,
+            "pages": 0,
+        })
+        if granularity == "month":
+            month = cursor.month + 1
+            year = cursor.year
+            if month > 12:
+                month = 1
+                year += 1
+            cursor = cursor.replace(year=year, month=month, day=1)
+        elif granularity == "year":
+            cursor = cursor.replace(year=cursor.year + 1, month=1, day=1)
+        else:
+            cursor = cursor + timedelta(days=1)
+
+    bucket_map = {bucket["key"]: bucket for bucket in buckets}
+    for day_key, stats in daily.items():
+        parsed = _parse_iso(day_key)
+        if not parsed:
+            continue
+        parsed = _to_utc(parsed)
+        if parsed < start or parsed > end:
+            continue
+        key = _bucket_key(parsed, granularity)
+        bucket = bucket_map.get(key)
+        if not bucket:
+            continue
+        bucket["docs"] += int(stats.get("docs", 0))
+        bucket["pages"] += int(stats.get("pages", 0))
+    return {"series": buckets}
+
+
+def _record_analytics(job_id: str, pages_count: int, inference_seconds: Optional[float], created_at: Optional[str]) -> None:
+    stamp = _parse_iso(created_at) or datetime.now(timezone.utc)
+    stamp = _to_utc(stamp)
+    with _ANALYTICS_LOCK:
+        state = _ANALYTICS_STATE
+        processed = state.setdefault("processed_jobs", [])
+        if job_id in processed:
+            return
+        processed.append(job_id)
+
+        state["total_docs"] = int(state.get("total_docs", 0)) + 1
+        state["total_pages"] = int(state.get("total_pages", 0)) + int(pages_count or 0)
+        state["total_inference_seconds"] = float(state.get("total_inference_seconds", 0.0)) + float(inference_seconds or 0.0)
+        state["last_updated"] = _now_iso()
+
+        day_key = stamp.date().isoformat()
+        daily = state.setdefault("daily", {})
+        entry = daily.setdefault(day_key, {"docs": 0, "pages": 0, "inference_seconds": 0.0})
+        entry["docs"] = int(entry.get("docs", 0)) + 1
+        entry["pages"] = int(entry.get("pages", 0)) + int(pages_count or 0)
+        entry["inference_seconds"] = float(entry.get("inference_seconds", 0.0)) + float(inference_seconds or 0.0)
+
+        _save_analytics_state(state)
 
 
 def _write_job_state(job_id: str, payload: Dict[str, Any]) -> None:
@@ -275,6 +430,13 @@ def _process_job(job_id: str, file_path: Path, preset: str, ocr_enabled: bool) -
         )
         _JOB_RESULTS[job_id] = payload
 
+        _record_analytics(
+            job_id,
+            len(pages) if pages else 0,
+            inference_seconds,
+            _JOB_STATE.get(job_id, {}).get("created_at"),
+        )
+
         summary_payload = {
             "job_id": job_id,
             "status": "complete",
@@ -314,6 +476,51 @@ def _process_job(job_id: str, file_path: Path, preset: str, ocr_enabled: bool) -
 async def health() -> Dict[str, Any]:
     _cleanup_jobs()
     return {"ok": True, "time": _now_iso()}
+
+
+@app.get("/analytics")
+async def get_analytics(
+    granularity: str = "day",
+    from_: Optional[str] = Query(None, alias="from"),
+    to: Optional[str] = Query(None, alias="to"),
+) -> Dict[str, Any]:
+    _cleanup_jobs()
+    granularity = _normalize_granularity(granularity)
+    defaults = _default_range(granularity)
+    with _ANALYTICS_LOCK:
+        state = _ANALYTICS_STATE
+        total_docs = int(state.get("total_docs", 0))
+        total_pages = int(state.get("total_pages", 0))
+        total_seconds = float(state.get("total_inference_seconds", 0.0))
+        last_updated = state.get("last_updated")
+        daily = dict(state.get("daily", {}))
+
+    start = _parse_iso(from_) or defaults["start"]
+    end = _parse_iso(to) or defaults["end"]
+
+    start = _to_utc(start)
+    end = _to_utc(end)
+    if start > end:
+        start, end = end, start
+
+    series_payload = _build_series(granularity, start, end, daily)
+    series = series_payload.get("series", [])
+    range_docs = sum(bucket.get("docs", 0) for bucket in series)
+    range_pages = sum(bucket.get("pages", 0) for bucket in series)
+    avg_seconds = total_seconds / total_pages if total_pages else None
+
+    return {
+        "granularity": granularity,
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "total_docs": total_docs,
+        "total_pages": total_pages,
+        "avg_seconds_per_page": avg_seconds,
+        "range_docs": range_docs,
+        "range_pages": range_pages,
+        "last_updated": last_updated,
+        "series": series,
+    }
 
 
 @app.post("/jobs", response_model=JobCreateResponse)

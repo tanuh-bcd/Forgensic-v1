@@ -45,6 +45,24 @@ const previewOverlay = $("preview-overlay");
 const previewEmpty = $("preview-empty");
 const previewScan = $("preview-scan");
 
+const usageDashboard = $("usage-dashboard");
+const kpiDocs = $("kpi-docs");
+const kpiPages = $("kpi-pages");
+const kpiAvg = $("kpi-avg");
+const kpiDocsMeta = $("kpi-docs-meta");
+const kpiPagesMeta = $("kpi-pages-meta");
+const kpiAvgMeta = $("kpi-avg-meta");
+const trendMeta = $("trend-meta");
+const trendBars = $("trend-bars");
+const trendLabels = $("trend-labels");
+const trendEmpty = $("trend-empty");
+const trendTotalPages = $("trend-total-pages");
+const trendTotalDocs = $("trend-total-docs");
+const trendFromInput = $("trend-from");
+const trendToInput = $("trend-to");
+const trendApplyBtn = $("trend-apply");
+const trendGranularityBtns = $$(".trend-granularity .seg-btn");
+
 const cropModal = $("crop-modal");
 const cropImage = $("crop-image");
 const cropMeta = $("crop-meta");
@@ -52,6 +70,11 @@ const cropCloseBtn = $("crop-close");
 const showInDocumentBtn = $("show-in-document-btn");
 
 const LAST_JOB_KEY = "forgensic_last_job";
+const trendState = {
+  granularity: "day",
+  from: null,
+  to: null
+};
 
 let selectedFile = null;
 let activeJobId = null;
@@ -148,6 +171,206 @@ function formatSeconds(value) {
   if (value < 1) return `${Math.round(value * 1000)} ms`;
   const precision = value < 10 ? 2 : 1;
   return `${value.toFixed(precision)} s`;
+}
+
+const numberFormatter = new Intl.NumberFormat("en-IN");
+
+function formatNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "--";
+  return numberFormatter.format(value);
+}
+
+function formatDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(value) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function startOfDay(date) {
+  const clone = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  clone.setHours(0, 0, 0, 0);
+  return clone;
+}
+
+function endOfDay(date) {
+  const clone = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  clone.setHours(23, 59, 59, 999);
+  return clone;
+}
+
+function getDefaultRange(granularity) {
+  const to = endOfDay(new Date());
+  const from = startOfDay(new Date(to));
+  if (granularity === "month") {
+    from.setMonth(from.getMonth() - 11, 1);
+  } else if (granularity === "year") {
+    from.setFullYear(from.getFullYear() - 4, 0, 1);
+  } else {
+    from.setDate(from.getDate() - 29);
+  }
+  return { from, to };
+}
+
+function formatBucketLabel(date, granularity) {
+  if (granularity === "month") {
+    return date.toLocaleDateString("en-US", { month: "short" });
+  }
+  if (granularity === "year") {
+    return date.toLocaleDateString("en-US", { year: "numeric" });
+  }
+  const label = date.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+  return label.replace(" ", "-");
+}
+
+let analyticsRequestId = 0;
+
+function getActiveRange(granularity) {
+  const defaults = getDefaultRange(granularity);
+  let from = trendState.from || defaults.from;
+  let to = trendState.to || defaults.to;
+  from = startOfDay(from);
+  to = endOfDay(to);
+  if (from > to) {
+    const swap = from;
+    from = to;
+    to = swap;
+  }
+  return { from, to };
+}
+
+async function fetchAnalyticsData(granularity, from, to) {
+  const params = new URLSearchParams();
+  params.set("granularity", granularity);
+  if (from) params.set("from", from.toISOString());
+  if (to) params.set("to", to.toISOString());
+  const res = await fetch(`${API_BASE_URL}/analytics?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error("Failed to load analytics");
+  }
+  return res.json();
+}
+
+function renderTrendChart(series, granularity) {
+  if (!trendBars) return;
+  trendBars.innerHTML = "";
+  if (trendLabels) {
+    trendLabels.innerHTML = "";
+    trendLabels.dataset.granularity = granularity;
+  }
+  const maxPages = Math.max(1, ...series.map((bucket) => bucket.pages));
+  series.forEach((bucket) => {
+    const ratio = maxPages ? bucket.pages / maxPages : 0;
+    const level = Math.max(0.04, ratio);
+    const intensity = Math.min(0.95, 0.2 + ratio * 0.8).toFixed(2);
+    const hue = Math.round(180 + ratio * 40);
+    const barColor = `hsl(${hue} 70% 48%)`;
+    const barColorDark = `hsl(${hue} 70% 34%)`;
+    const bar = document.createElement("div");
+    bar.className = "trend-bar";
+    bar.style.setProperty("--level", level.toFixed(2));
+    bar.style.setProperty("--intensity", intensity);
+    bar.style.setProperty("--bar-color", barColor);
+    bar.style.setProperty("--bar-color-dark", barColorDark);
+    bar.title = `${formatBucketLabel(bucket.date, granularity)}: ${bucket.pages} pages`;
+    trendBars.appendChild(bar);
+
+    if (trendLabels) {
+      const label = document.createElement("div");
+      label.className = "trend-label";
+      label.textContent = formatBucketLabel(bucket.date, granularity);
+      trendLabels.appendChild(label);
+    }
+  });
+}
+
+async function renderUsageDashboard() {
+  if (!usageDashboard) return;
+  const { from, to } = getActiveRange(trendState.granularity);
+  const requestId = ++analyticsRequestId;
+
+  try {
+    const data = await fetchAnalyticsData(trendState.granularity, from, to);
+    if (requestId !== analyticsRequestId) return;
+
+    if (kpiDocs) kpiDocs.textContent = formatNumber(data.total_docs || 0);
+    if (kpiPages) kpiPages.textContent = formatNumber(data.total_pages || 0);
+    if (kpiAvg) {
+      kpiAvg.textContent = data.avg_seconds_per_page ? formatSeconds(data.avg_seconds_per_page) : "--";
+    }
+    if (kpiDocsMeta) {
+      kpiDocsMeta.textContent = data.last_updated
+        ? `Last update ${new Date(data.last_updated).toLocaleString()}`
+        : "No activity yet";
+    }
+    if (kpiPagesMeta) kpiPagesMeta.textContent = "Pages detected across uploads";
+    if (kpiAvgMeta) kpiAvgMeta.textContent = "Weighted average across runs";
+
+    const totalPages = data.range_pages || 0;
+    const totalDocs = data.range_docs || 0;
+    if (trendTotalPages) trendTotalPages.textContent = `${formatNumber(totalPages)} pages`;
+    if (trendTotalDocs) trendTotalDocs.textContent = `${formatNumber(totalDocs)} documents`;
+
+    if (trendMeta) {
+      const rangeFrom = data.from ? new Date(data.from) : from;
+      const rangeTo = data.to ? new Date(data.to) : to;
+      const rangeLabel = `${rangeFrom.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${rangeTo.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+      const viewLabel = trendState.granularity === "day" ? "Daily" : trendState.granularity === "month" ? "Monthly" : "Yearly";
+      trendMeta.textContent = `${viewLabel} view · ${rangeLabel}`;
+    }
+
+    const series = (data.series || []).map((bucket) => ({
+      date: new Date(bucket.date),
+      pages: bucket.pages || 0,
+      docs: bucket.docs || 0
+    }));
+
+    const hasActivity = totalPages > 0 || totalDocs > 0;
+    if (trendEmpty) trendEmpty.classList.toggle("hidden", hasActivity);
+    renderTrendChart(series, trendState.granularity);
+  } catch (err) {
+    if (requestId !== analyticsRequestId) return;
+    if (trendEmpty) trendEmpty.classList.remove("hidden");
+    showToast("Analytics service unavailable", "error");
+  }
+}
+
+function setTrendGranularity(granularity) {
+  trendState.granularity = granularity;
+  trendState.from = null;
+  trendState.to = null;
+  trendGranularityBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.granularity === granularity);
+  });
+  const { from, to } = getDefaultRange(granularity);
+  if (trendFromInput) trendFromInput.value = formatDateInputValue(from);
+  if (trendToInput) trendToInput.value = formatDateInputValue(to);
+  renderUsageDashboard();
+}
+
+function initUsageDashboard() {
+  if (!usageDashboard) return;
+  const defaults = getDefaultRange(trendState.granularity);
+  if (trendFromInput && !trendFromInput.value) trendFromInput.value = formatDateInputValue(defaults.from);
+  if (trendToInput && !trendToInput.value) trendToInput.value = formatDateInputValue(defaults.to);
+
+  trendGranularityBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setTrendGranularity(btn.dataset.granularity || "day"));
+  });
+
+  trendApplyBtn?.addEventListener("click", () => {
+    trendState.from = parseDateInput(trendFromInput?.value);
+    trendState.to = parseDateInput(trendToInput?.value);
+    renderUsageDashboard();
+  });
+
+  renderUsageDashboard();
 }
 
 function setInferenceTime(totalSeconds, avgSeconds) {
@@ -404,6 +627,7 @@ function openCropModal(pageNumber, box) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+    if (trendLabels) trendLabels.innerHTML = "";
     cropImage.src = canvas.toDataURL("image/png");
     if (cropMeta) {
       cropMeta.textContent = `Page ${pageNumber} · ${w}×${h}px`;
@@ -625,7 +849,7 @@ async function startAnalysis() {
     });
   } catch (err) {
     if (uploadStatus) uploadStatus.textContent = "Upload failed";
-    if (statusFoot) statusFoot.textContent = err?.message || "Upload failed";
+    renderTrendChart(series, trendState.granularity);
     setStatus("Upload failed", 0);
     return;
   }
@@ -673,7 +897,8 @@ function initDashboard() {
 function initPage() {
   if (pageInitialized) return;
   pageInitialized = true;
-  if (page === "dashboard") initDashboard();
+  if (page === "forgery") initDashboard();
+  if (page === "dashboard") initUsageDashboard();
 }
 
 function initCommon() {

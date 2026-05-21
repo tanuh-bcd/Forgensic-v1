@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Forgensic | Dashboard</title>
+  <meta name="description" content="Platform dashboard for Forgensic usage and throughput."/>
+  <link rel="icon" href="logos/tanuh_logo.png" type="image/png"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body data-page="dashboard">
+
+<header class="topbar">
+  <div class="topbar-row-1">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="Forgensic home">
+        <svg class="brand-icon" width="36" height="36" viewBox="0 0 32 32" fill="none">
+          <rect x="2" y="2" width="12" height="12" rx="2" fill="#e53e3e"/>
+          <rect x="18" y="2" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6"/>
+          <rect x="2" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".6"/>
+          <rect x="18" y="18" width="12" height="12" rx="2" fill="#e53e3e" opacity=".3"/>
+        </svg>
+        <div class="brand-text">
+          <div class="brand-name">Digital Public Infrastructure</div>
+          <div class="brand-sub">TANUH FOUNDATION: AI Center of Excellence in Healthcare</div>
+        </div>
+      </a>
+
+      <div class="topbar-logos">
+        <img class="logo-tanuh" src="logos/tanuh_logo.png" alt="TANUH"/>
+        <img class="logo-moe" src="logos/MoE_Logo.svg" alt="Ministry of Education"/>
+        <img class="logo-iisc" src="logos/IISc_Logo.png" alt="IISc"/>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar-row-2">
+    <div class="topbar-inner" style="justify-content:center; gap: 16px;">
+      <nav class="tab-nav">
+        <a class="tab-link" href="index.html" data-tab="forgery">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+          Forgery Detection
+        </a>
+        <a class="tab-link active" href="dashboard.html" data-tab="dashboard">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a1 1 0 011-1h10a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V3zm3 4a1 1 0 012-2h1a1 1 0 110 2H9v2a1 1 0 11-2 0V7zm6 0a1 1 0 012 2v4a1 1 0 11-2 0V7zM9 12a1 1 0 012 0v3a1 1 0 11-2 0v-3z" clip-rule="evenodd"/></svg>
+          Dashboard
+        </a>
+        <a class="tab-link" href="team.html" data-tab="team">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+          About Us
+        </a>
+      </nav>
+      <a class="btn-api" href="api.html">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        API Access
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="main-content">
+  <div class="content-container">
+    <div class="content-card">
+      <div class="page-heading">
+        <div class="page-heading-row">
+          <svg class="page-heading-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a1 1 0 011-1h10a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V3zm3 4a1 1 0 012-2h1a1 1 0 110 2H9v2a1 1 0 11-2 0V7zm6 0a1 1 0 012 2v4a1 1 0 11-2 0V7zM9 12a1 1 0 012 0v3a1 1 0 11-2 0v-3z" clip-rule="evenodd"/></svg>
+          <h1>Platform Dashboard</h1>
+        </div>
+        <p class="page-subtitle">Global usage and throughput across all uploads.</p>
+      </div>
+
+      <section class="impact-dashboard" id="usage-dashboard">
+        <div class="dashboard-heading">
+          <div class="dashboard-actions">
+            <div class="segmented trend-granularity" role="tablist" aria-label="Trend granularity">
+              <button class="seg-btn active" data-granularity="day" type="button" role="tab">Daily</button>
+              <button class="seg-btn" data-granularity="month" type="button" role="tab">Monthly</button>
+              <button class="seg-btn" data-granularity="year" type="button" role="tab">Yearly</button>
+            </div>
+            <div class="filter-group">
+              <label for="trend-from">From</label>
+              <input type="date" id="trend-from" />
+            </div>
+            <div class="filter-group">
+              <label for="trend-to">To</label>
+              <input type="date" id="trend-to" />
+            </div>
+            <button class="btn-filter" id="trend-apply" type="button">Apply</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Total documents processed</div>
+            <div class="kpi-value" id="kpi-docs">--</div>
+            <div class="kpi-meta" id="kpi-docs-meta">No activity yet</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total pages processed</div>
+            <div class="kpi-value" id="kpi-pages">--</div>
+            <div class="kpi-meta" id="kpi-pages-meta">Pages detected across uploads</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Avg processing time per page</div>
+            <div class="kpi-value" id="kpi-avg">--</div>
+            <div class="kpi-meta" id="kpi-avg-meta">Weighted average across runs</div>
+          </div>
+        </div>
+
+        <div class="trend-card">
+          <div class="trend-title-row">
+            <div>
+              <div class="trend-title">Pages upload trend</div>
+              <div class="trend-meta" id="trend-meta">Daily view</div>
+            </div>
+            <div class="trend-badges">
+              <span class="trend-pill" id="trend-total-pages">0 pages</span>
+              <span class="trend-pill" id="trend-total-docs">0 documents</span>
+            </div>
+          </div>
+          <div class="trend-chart" id="trend-chart" role="img" aria-label="Pages uploaded over time">
+            <div class="trend-bars" id="trend-bars"></div>
+            <div class="trend-labels" id="trend-labels"></div>
+            <div class="trend-empty hidden" id="trend-empty">No activity yet. Process a document to populate usage.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-stats">© 2026 Forgensic · TANUH Foundation · Indian Institute of Science · Bengaluru, India</div>
+</footer>
+
+<div class="toast hidden" id="toast" aria-live="polite"></div>
+
+<script type="module" src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
